@@ -416,4 +416,34 @@ console.log('date math:');
   check('weekday of 2025-01-01 is Wednesday (UTC)', parseIso('2025-01-01').getUTCDay() === 3);
 }
 
+console.log('units + currency:');
+{
+  const { create, all } = await import('mathjs');
+  const unitMath = create(all);
+  const rates = { USD: 1, EUR: 0.92, GBP: 0.78, JPY: 156.40, CNY: 7.24 } as Record<string, number>;
+
+  function fmt(s: string) {
+    return s.replace(/\s*[A-Za-zµ]+\s*$/, '').trim();
+  }
+
+  check('5 km = 5000 m', fmt(unitMath.evaluate('5 km to m').toString()) === '5000');
+  check('1 km = 1000 m', fmt(unitMath.evaluate('1 km to m').toString()) === '1000');
+  check('100 kg ~= 220.46 lb', Math.abs(Number(fmt(unitMath.evaluate('100 kg to lb').toString())) - 220.462) < 0.1);
+  check('0 celsius = 32 fahrenheit', fmt(unitMath.evaluate('0 celsius to fahrenheit').toString()) === '32');
+  check('100 celsius ~= 212 fahrenheit', Math.abs(Number(fmt(unitMath.evaluate('100 celsius to fahrenheit').toString())) - 212) < 0.01);
+  check('0 kelvin = -273.15 celsius', Math.abs(Number(fmt(unitMath.evaluate('0 kelvin to celsius').toString())) + 273.15) < 1e-6);
+  check('1 l ~= 0.2642 gal (US liquid)', Math.abs(Number(fmt(unitMath.evaluate('1 l to gal').toString())) - 0.2642) < 0.01);
+  check('1 KiB = 1024 byte', fmt(unitMath.evaluate('1 KiB to byte').toString()) === '1024');
+
+  // Currency: rate = units-of-currency per 1 USD; convert = n * rateTo / rateFrom
+  function curr(n: number, from: string, to: string): number {
+    return (n * rates[to]) / rates[from];
+  }
+  check('USD currency rate = 1', rates.USD === 1);
+  check('100 USD -> 92 EUR', Math.abs(curr(100, 'USD', 'EUR') - 92) < 1e-6);
+  check('100 USD -> 724 CNY', Math.abs(curr(100, 'USD', 'CNY') - 724) < 1e-6);
+  check('100 CNY -> 13.81 USD', Math.abs(curr(100, 'CNY', 'USD') - 13.81) < 0.01);
+  check('100 EUR -> 100 EUR (no-op)', Math.abs(curr(100, 'EUR', 'EUR') - 100) < 1e-6);
+}
+
 console.log(`\n${passed} passed, 0 failed`);

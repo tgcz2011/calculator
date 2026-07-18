@@ -344,3 +344,71 @@ test.describe('Date / Time mode', () => {
     await expect(page.getByTestId('date-weekday-input')).toHaveValue(today);
   });
 });
+
+test.describe('Units + Currency mode', () => {
+  test('Units tab is before Date tab in the order', async ({ page }) => {
+    const labels = await page.getByRole('tab').allTextContents();
+    const unitsIdx = labels.indexOf('Units');
+    const dateIdx = labels.indexOf('Date');
+    expect(unitsIdx).toBeGreaterThan(-1);
+    expect(dateIdx).toBeGreaterThan(-1);
+    expect(unitsIdx).toBeLessThan(dateIdx);
+  });
+
+  test('switching to Units hides Display and Keypad', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await expect(page.getByTestId('units-mode')).toBeVisible();
+    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+  });
+
+  test('length conversion: 5 km = 5000 m', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByTestId('units-amount').fill('5');
+    await expect(page.getByTestId('units-result-value')).toContainText('5,000');
+  });
+
+  test('mass conversion: 1 kg -> g = 1000', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '质量' }).click();
+    await page.getByTestId('units-amount').fill('1');
+    await expect(page.getByTestId('units-result-value')).toContainText('1,000');
+  });
+
+  test('temperature conversion: 0 celsius -> 32 fahrenheit', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '温度' }).click();
+    await page.getByTestId('units-amount').fill('0');
+    await expect(page.getByTestId('units-result-value')).toContainText('32');
+  });
+
+  test('data conversion: 1 KiB -> 1024 byte', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '数据' }).click();
+    await page.getByTestId('units-amount').fill('1');
+    await page.getByTestId('units-from').selectOption('KiB');
+    await page.getByTestId('units-to').selectOption('byte');
+    await expect(page.getByTestId('units-result-value')).toContainText('1,024');
+  });
+
+  test('swap button flips from/to', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByTestId('units-amount').fill('1');
+    await expect(page.getByTestId('units-from')).toHaveValue('km');
+    await expect(page.getByTestId('units-to')).toHaveValue('m');
+    await page.getByTestId('units-swap').click();
+    await expect(page.getByTestId('units-from')).toHaveValue('m');
+    await expect(page.getByTestId('units-to')).toHaveValue('km');
+  });
+
+  test('currency shows snapshot stamp + USD/EUR conversion', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '货币' }).click();
+    await expect(page.getByTestId('currency-snapshot')).toContainText('快照');
+    await page.getByTestId('units-amount').fill('100');
+    await page.getByTestId('units-from').selectOption('USD');
+    await page.getByTestId('units-to').selectOption('EUR');
+    // 100 USD * 0.92 = 92 EUR
+    await expect(page.getByTestId('units-result-value')).toContainText('92');
+    await expect(page.getByTestId('units-result-value')).toContainText('EUR');
+  });
+});
