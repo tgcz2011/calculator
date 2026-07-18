@@ -9,6 +9,7 @@ import { Units } from './components/Units';
 import { Programmer } from './components/Programmer';
 import { useCalculator } from './state/useCalculator';
 import { useKeyboard } from './native/keyboard';
+import { useKeyboardExtras } from './hooks/useKeyboardExtras';
 import { isIOS, isDesktop, isMobileNative, isWeb } from './native/platform';
 
 // ponytail: width breakpoint -> shell width class. Three tiers:
@@ -81,6 +82,7 @@ export default function App() {
   );
 
   useKeyboard(handleKey);
+  useKeyboardExtras(calc);
 
   // ponytail: iOS safe-area tweak for the display top — extend the dark display into the
   // status bar via a small extra style. Lightweight, no extra component.
