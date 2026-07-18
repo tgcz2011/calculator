@@ -21,7 +21,10 @@
 
 ## Locked contracts (do NOT change signatures)
 
-- Engine: `src/engine/index.ts` - `evaluate(expr, options?)`, `setAngleMode`, `getAngleMode`
+- Engine: `src/engine/index.ts` - `evaluate(expr, options?)`, `setAngleMode`, `getAngleMode`, `setProgrammer`, `getProgrammer`, `toRadix`
+  - Basic/scientific: `evaluate(expr, { angle })` -> `{ value, error?, errorCode? }`
+  - Programmer (P1): `evaluate(expr, { radix, wordSize })` -> `{ value, error?, errorCode?, radix? }`. Presence of `radix`/`wordSize` routes to the BigInt evaluator (QWORD-exact). `radix` = input radix for bare literals (2/8/10/16); `wordSize` = 8/16/32/64. `value` = result in input radix (signed for dec); `radix` = `{ hex, dec, oct, bin }` all-radix reps (unpadded - UI pads). Operators: `+ - * / % & | ^ ~ << >> >>>` (C precedence; `/` = signed integer division truncating toward zero; `>>` arithmetic, `>>>` logical). Error codes: `INVALID_DIGIT` / `DIV_ZERO` / `SYNTAX` / `PAREN` / `MISSING_OPERAND` (plus the basic/scientific codes).
+  - `toRadix(decimal, wordSize?)` = pure conversion of a decimal string to all-radix reps (for UI radix switch without re-eval).
 - History: `src/history/api.ts` - `record`, `list`, `clear` (sync), `initHistory()` (await at boot)
 
 Minimax-M3 owns UI (`src/App.tsx`, `src/components/`, `src/modes/`, `src/styles/`).
