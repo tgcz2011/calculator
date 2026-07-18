@@ -13,6 +13,19 @@ export interface HistoryAPI {
   clear(): void;
 }
 
+// ponytail: optional sync push hook. When a SyncManager is registered (via
+// setSyncPush), record/clear schedule a debounced push. Until then, sync is
+// dormant and history behaves exactly as before. Kept here (not in a separate
+// module) so the sync trigger is atomically co-located with the write - no
+// chance of a record slipping through without the push firing.
+type SyncPushFn = () => void;
+let syncPush: SyncPushFn | null = null;
+
+/** Register a sync push trigger. Pass null to disable. */
+export function setSyncPush(fn: SyncPushFn | null): void {
+  syncPush = fn;
+}
+
 const MAX_ENTRIES = 500;
 const LS_KEY = 'calc:history';
 
@@ -82,9 +95,12 @@ if (isCapacitor) {
 }
 
 export const history: HistoryAPI = {
-  record: (e, r) => impl.record(e, r),
+  // ponytail: single syncPush chokepoint. Fires after both LocalStorage and
+  // SQLite backends (impl is swapped in initHistory), so native path is covered
+  // without threading the hook into the SQLite class.
+  record: (e, r) => { const x = impl.record(e, r); syncPush?.(); return x; },
   list: () => impl.list(),
-  clear: () => impl.clear()
+  clear: () => { impl.clear(); syncPush?.(); }
 };
 
 // App boot awaits this before rendering so native SQLite cache is hydrated before first list().
