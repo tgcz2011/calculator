@@ -41,7 +41,10 @@ export class WebDavSyncProvider implements SyncProvider {
 
   constructor(
     private config: WebDavConfig,
-    private fetchFn: FetchLike = globalThis.fetch,
+    // ponytail: .bind(globalThis) - browsers require fetch's this===Window, else
+    // "Illegal invocation". Smoke passes a fake fetch so this default is never
+    // exercised there; the real browser path was broken without the bind.
+    private fetchFn: FetchLike = globalThis.fetch.bind(globalThis),
   ) {
     this.label = config.endpoint.includes('jianguoyun.com') ? '坚果云' : 'WebDAV';
   }
