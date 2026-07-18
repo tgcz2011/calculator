@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { engine, type AngleMode } from '../engine';
 import { history } from '../history/api';
 
-export type Mode = 'basic' | 'scientific' | 'history' | 'date';
+export type Mode = 'basic' | 'scientific' | 'history' | 'date' | 'units';
 
 interface Snapshot {
   expression: string;
