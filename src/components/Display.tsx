@@ -1,5 +1,29 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useRef } from 'react';
 
+// ponytail: one Unicode glyph per error code, semantically chosen:
+//   UNCLOSED          - ellipsis (incomplete)
+//   PAREN             - right paren (close hint)
+//   MISSING_OPERAND   - underscore (blank slot)
+//   UNKNOWN_SYMBOL    - question mark
+//   NOT_FUNCTION      - ƒ (italic f for "function")
+//   CONVERT           - swap arrows (type swap)
+//   ENGINE            - bang (generic engine fault)
+// Same red color across all codes (Apple HIG consistency); only glyph varies.
+const ERROR_GLYPHS: Record<string, string> = {
+  UNCLOSED: '\u2026',
+  PAREN: ')',
+  MISSING_OPERAND: '_',
+  UNKNOWN_SYMBOL: '?',
+  NOT_FUNCTION: '\u0192',
+  CONVERT: '\u2194',
+  ENGINE: '!',
+};
+
+function errorGlyph(code: string | undefined): string | null {
+  if (!code) return null;
+  return ERROR_GLYPHS[code] ?? '!';
+}
+
 interface Props {
   expression: string;
   result: string;
@@ -57,6 +81,24 @@ export function Display(props: Props) {
     }
   }
 
+  const glyphStyle: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '1.6em',
+    height: '1.6em',
+    marginRight: '0.4em',
+    borderRadius: '9999px',
+    background: 'var(--danger-soft)',
+    color: 'var(--danger)',
+    fontSize: '0.8em',
+    fontWeight: 700,
+    fontFamily: 'var(--font-system)',
+    lineHeight: 1,
+    flexShrink: 0,
+    verticalAlign: 'middle',
+  };
+
   const exprStyle: CSSProperties = {
     fontSize: 'var(--display-fs-expr)',
     color: 'var(--text-secondary)',
@@ -111,7 +153,23 @@ export function Display(props: Props) {
         data-error-code={props.error && props.errorCode ? props.errorCode : undefined}
         data-error={props.error ? 'true' : undefined}
       >
-        {props.error ? props.error : props.result || '\u00a0'}
+        {props.error ? (
+          <>
+            {errorGlyph(props.errorCode) && (
+              <span
+                className="error-glyph"
+                data-error-code={props.errorCode}
+                aria-hidden="true"
+                style={glyphStyle}
+              >
+                {errorGlyph(props.errorCode)}
+              </span>
+            )}
+            <span className="error-message">{props.error}</span>
+          </>
+        ) : (
+          props.result || '\u00a0'
+        )}
       </div>
     </div>
   );
