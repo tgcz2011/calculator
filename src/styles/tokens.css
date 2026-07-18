@@ -97,6 +97,59 @@
   }
 }
 
+/* Manual theme override (set by useTheme hook + index.html inline script).
+   Specificity 0,2,0 (root + attr) beats the media query (0,1,0 inside media),
+   so explicit [data-theme] always wins over prefers-color-scheme. */
+:root[data-theme='light'] {
+  --bg: #f2f2f7;
+  --bg-elevated: #ffffff;
+  --bg-display: #1c1c1e;
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --hairline: rgba(60, 60, 67, 0.18);
+  --fg: #000000;
+  --fg-secondary: #3c3c43;
+  --fg-tertiary: #8e8e93;
+  --fg-display: #ffffff;
+  --fg-display-secondary: rgba(235, 235, 245, 0.6);
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+  --danger: #ff3b30;
+  --danger-soft: rgba(255, 59, 48, 0.14);
+  --operator-bg: #ff9f0a;
+  --operator-fg: #ffffff;
+  --key-bg: rgba(255, 255, 255, 0.9);
+  --key-fg: #000000;
+  --key-fn-bg: rgba(118, 118, 128, 0.24);
+  --key-fn-fg: #000000;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme='dark'] {
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --bg-display: #000000;
+  --bg-glass: rgba(28, 28, 30, 0.72);
+  --hairline: rgba(255, 255, 255, 0.16);
+  --fg: #ffffff;
+  --fg-secondary: #ebebf5;
+  --fg-tertiary: #8e8e93;
+  --fg-display: #ffffff;
+  --fg-display-secondary: rgba(235, 235, 245, 0.6);
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.18);
+  --danger: #ff453a;
+  --danger-soft: rgba(255, 69, 58, 0.18);
+  --operator-bg: #ff9f0a;
+  --operator-fg: #1c1c1e;
+  --key-bg: rgba(44, 44, 46, 0.9);
+  --key-fg: #ffffff;
+  --key-fn-bg: rgba(118, 118, 128, 0.32);
+  --key-fn-fg: #ffffff;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0.01ms;

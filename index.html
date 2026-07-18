@@ -9,6 +9,22 @@
     <title>Calculator</title>
   </head>
   <body>
+    <script>
+      // ponytail: apply saved theme before first paint to avoid a flash of light.
+      // Reads localStorage 'theme-pref' set by src/hooks/useTheme.ts; if absent,
+      // leaves <html> alone and lets tokens.css @media (prefers-color-scheme: dark)
+      // pick the initial colors. No deps, no React, runs synchronously.
+      (function () {
+        try {
+          var t = localStorage.getItem('theme-pref');
+          if (t === 'light' || t === 'dark') {
+            document.documentElement.setAttribute('data-theme', t);
+          }
+        } catch (e) {
+          // localStorage may throw (e.g. about:blank in tests); no-op.
+        }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
