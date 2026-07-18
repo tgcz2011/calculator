@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#1c1c1e"/>
+  <rect x="72" y="72" width="368" height="96" rx="20" fill="#000"/>
+  <text x="400" y="142" font-family="-apple-system, Helvetica, sans-serif" font-size="56" font-weight="200" fill="#fff" text-anchor="end">2+2</text>
+  <g fill="#d4d4d6">
+    <rect x="72" y="200" width="80" height="80" rx="20"/>
+    <rect x="168" y="200" width="80" height="80" rx="20"/>
+    <rect x="264" y="200" width="80" height="80" rx="20"/>
+  </g>
+  <rect x="360" y="200" width="80" height="80" rx="20" fill="#ff9f0a"/>
+  <g fill="#d4d4d6">
+    <rect x="72" y="296" width="80" height="80" rx="20"/>
+    <rect x="168" y="296" width="80" height="80" rx="20"/>
+    <rect x="264" y="296" width="80" height="80" rx="20"/>
+  </g>
+  <rect x="360" y="296" width="80" height="80" rx="20" fill="#ff9f0a"/>
+  <g fill="#d4d4d6">
+    <rect x="72" y="392" width="80" height="80" rx="20"/>
+    <rect x="168" y="392" width="80" height="80" rx="20"/>
+    <rect x="264" y="392" width="80" height="80" rx="20"/>
+  </g>
+  <rect x="360" y="392" width="80" height="80" rx="20" fill="#ff9f0a"/>
+</svg>

@@ -1,0 +1,74 @@
+/* ponytail: baseline design tokens. Minimax-M3 owns the full design system; this is the
+   minimal Apple-style substrate so the shell renders correctly on all 6 platforms.
+   Minimax's tokens.css (richer) supersedes this on merge. */
+
+:root {
+  /* SF Pro stack with graceful fallback. iOS/macOS get the real thing; Win/Linux/Android
+     fall back to system sans which is the closest Apple-style approximation. */
+  --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Helvetica Neue', 'Segoe UI', Roboto, system-ui, sans-serif;
+
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 18px;
+
+  --ease-apple: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --dur: 0.18s;
+
+  /* Light mode system colors (Apple HIG) */
+  --bg: #f2f2f7;
+  --bg-elevated: #ffffff;
+  --bg-display: #1c1c1e;
+  --fg: #000000;
+  --fg-secondary: #3c3c43;
+  --fg-display: #ffffff;
+  --fg-display-secondary: rgba(255, 255, 255, 0.6);
+  --accent: #007aff;
+  --danger: #ff3b30;
+  --operator-bg: #d4d4d6;
+  --operator-fg: #000000;
+  --key-bg: rgba(255, 255, 255, 0.9);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --bg-elevated: #1c1c1e;
+    --bg-display: #1c1c1e;
+    --fg: #ffffff;
+    --fg-secondary: #ebebf5;
+    --fg-display: #ffffff;
+    --fg-display-secondary: rgba(235, 235, 245, 0.6);
+    --accent: #0a84ff;
+    --danger: #ff453a;
+    --operator-bg: #2c2c2e;
+    --operator-fg: #ffffff;
+    --key-bg: rgba(44, 44, 46, 0.9);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0s; }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: var(--font-system);
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+body {
+  /* safe-area insets applied on .app-shell via env() */
+}
