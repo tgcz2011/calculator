@@ -1,0 +1,112 @@
+import { useMemo } from 'react';
+import { history } from '../history/api';
+
+interface Props {
+  bump: number;
+  onRecall(expression: string, result: string): void;
+  onClear(): void;
+}
+
+export function HistoryList({ bump, onRecall, onClear }: Props) {
+  const items = useMemo(() => {
+    void bump;
+    return history.list();
+  }, [bump]);
+
+  if (!items.length) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-tertiary)',
+          padding: 'var(--s-6)',
+          gap: 'var(--s-2)',
+        }}
+      >
+        <div style={{ fontSize: 48, opacity: 0.5 }} aria-hidden>
+          ⌛︎
+        </div>
+        <div style={{ fontSize: 15 }}>No history yet</div>
+        <div style={{ fontSize: 13 }}>Calculations you run will appear here</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: 'var(--s-2) var(--s-4)',
+        }}
+      >
+        <span style={{ fontSize: 13, color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.04em' }}>
+          HISTORY
+        </span>
+        <button
+          type="button"
+          onClick={onClear}
+          style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}
+        >
+          Clear
+        </button>
+      </div>
+      <ul
+        style={{
+          listStyle: 'none',
+          margin: 0,
+          padding: '0 var(--s-4) var(--s-4)',
+          overflow: 'auto',
+          flex: 1,
+        }}
+      >
+        {items.map((e) => (
+          <li key={e.id}>
+            <button
+              type="button"
+              onClick={() => onRecall(e.expression, e.result)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                width: '100%',
+                padding: 'var(--s-3) 0',
+                borderBottom: '0.5px solid var(--hairline)',
+                gap: 'var(--s-1)',
+              }}
+            >
+              <span
+                style={{
+                  color: 'var(--text-secondary)',
+                  fontSize: 17,
+                  textAlign: 'right',
+                  overflowWrap: 'break-word',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {e.expression}
+              </span>
+              <span
+                style={{
+                  color: 'var(--text-tertiary)',
+                  fontSize: 28,
+                  fontWeight: 300,
+                  letterSpacing: '-0.02em',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                = {e.result}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

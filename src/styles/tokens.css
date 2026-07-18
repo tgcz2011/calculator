@@ -1,0 +1,194 @@
+/* Apple-style design tokens. Owner: Minimax-M3.
+   Locked constraints (from Leader):
+   - SF Pro font stack
+   - System color tokens, Light/Dark via prefers-color-scheme
+   - 12-18px radii
+   - Subtle elevation shadows
+   - cubic-bezier(0.25, 0.1, 0.25, 1) transitions
+   - Liquid Glass: subtle backdrop-filter blur
+   - prefers-reduced-motion: zero motion
+
+   Variable naming kept compatible with General's baseline (--bg, --accent, ...)
+   so the General App.tsx placeholder still resolves if needed. */
+
+:root {
+  /* Type — SF Pro system stack with sensible fallbacks */
+  --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
+    'Helvetica Neue', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  /* Spacing scale (4/8pt) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+
+  /* Radius — spec says 12-18px */
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --ease-apple: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+  --dur-slow: 360ms;
+
+  /* Display sizing — scales fluidly with width */
+  --display-fs: clamp(48px, 9vw, 96px);
+  --display-fs-expr: clamp(20px, 4vw, 30px);
+  --key-size: clamp(56px, 13vw, 76px);
+
+  /* Light theme (Apple HIG base) */
+  --bg: #f2f2f7;
+  --bg-elevated: #ffffff;
+  --bg-display: #1c1c1e;
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --hairline: rgba(60, 60, 67, 0.18);
+  --fg: #000000;
+  --fg-secondary: #3c3c43;
+  --fg-tertiary: #8e8e93;
+  --fg-display: #ffffff;
+  --fg-display-secondary: rgba(235, 235, 245, 0.6);
+  --accent: #007aff;
+  --accent-soft: rgba(0, 122, 255, 0.12);
+  --danger: #ff3b30;
+  --operator-bg: #ff9f0a;
+  --operator-fg: #ffffff;
+  --key-bg: rgba(255, 255, 255, 0.9);
+  --key-fg: #000000;
+  --key-fn-bg: rgba(118, 118, 128, 0.24);
+  --key-fn-fg: #000000;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --bg-elevated: #1c1c1e;
+    --bg-display: #000000;
+    --bg-glass: rgba(28, 28, 30, 0.72);
+    --hairline: rgba(255, 255, 255, 0.16);
+    --fg: #ffffff;
+    --fg-secondary: #ebebf5;
+    --fg-tertiary: #8e8e93;
+    --fg-display: #ffffff;
+    --fg-display-secondary: rgba(235, 235, 245, 0.6);
+    --accent: #0a84ff;
+    --accent-soft: rgba(10, 132, 255, 0.18);
+    --danger: #ff453a;
+    --operator-bg: #ff9f0a;
+    --operator-fg: #1c1c1e;
+    --key-bg: rgba(44, 44, 46, 0.9);
+    --key-fg: #ffffff;
+    --key-fn-bg: rgba(118, 118, 128, 0.32);
+    --key-fn-fg: #ffffff;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0.01ms;
+    --dur: 0.01ms;
+    --dur-slow: 0.01ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  font-family: var(--font-system);
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  overscroll-behavior: none;
+  user-select: none;
+  transition: background-color var(--dur) var(--ease-apple),
+    color var(--dur) var(--ease-apple);
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Liquid Glass utility — subtle backdrop blur for elevated panels.
+   Falls back gracefully on browsers without backdrop-filter support. */
+.liquid-glass {
+  background: var(--bg-glass);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-glass {
+    background: var(--bg-elevated);
+  }
+}
+
+/* Responsive shell widths.
+   Phone: full-bleed up to 600px.
+   Tablet (iPad): centered 720px column with side safe-area.
+   Desktop (Mac/Win/Linux): centered 480px column, similar to phone. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--bg);
+  width: 100%;
+  max-width: 600px;
+}
+
+@media (min-width: 768px) {
+  .shell {
+    max-width: 720px;
+    padding-top: calc(env(safe-area-inset-top) + var(--s-4));
+    padding-bottom: calc(env(safe-area-inset-bottom) + var(--s-4));
+  }
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    max-width: 480px;
+    box-shadow: var(--shadow-elevated);
+    border-radius: var(--radius-lg);
+    margin: var(--s-6) auto;
+    height: calc(100% - var(--s-12));
+    overflow: hidden;
+  }
+}
