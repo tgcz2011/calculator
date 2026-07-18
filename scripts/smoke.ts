@@ -142,4 +142,248 @@ check('most recent first', history.list()[0].expression === '6/2');
 history.clear();
 check('clear empties list', history.list().length === 0);
 
+// --- sync tests (crypto + merge + webdav + full round-trip) ---
+// ponytail: reuses the assert+check runner above. No framework. WebDAV is
+// exercised against an in-memory fake server (fetch mock) so no network. Crypto
+// uses real Web Crypto (Node 20+ has globalThis.crypto.subtle).
+
+const { encryptBlob, decryptBlob, SyncCryptoError } = await import('../src/sync/crypto');
+const { mergeHistories, SYNC_MAX_ENTRIES } = await import('../src/sync/merge');
+const { WebDavSyncProvider, WebDavSyncError } = await import('../src/sync/webdav');
+const { JIANGUOYUN_PRESET } = await import('../src/sync/types');
+const { SyncManager } = await import('../src/sync/manager');
+
+console.log('sync crypto (AES-GCM, server-blind):');
+{
+  const blob = await encryptBlob('{"hello":"world"}', 'correct horse battery staple');
+  check('blob is base64 string', typeof blob === 'string' && blob.length > 0 && /^[A-Za-z0-9+/=]+$/.test(blob));
+  check('blob differs from plaintext', !blob.includes('hello'));
+  const pt = await decryptBlob(blob, 'correct horse battery staple');
+  check('decrypt round-trip', pt === '{"hello":"world"}');
+  // wrong passphrase -> throws
+  let threw = false;
+  try { await decryptBlob(blob, 'wrong passphrase'); } catch (e) {
+    threw = e instanceof SyncCryptoError && e.code === 'wrong_pass';
+  }
+  check('wrong passphrase throws', threw);
+  // tampered blob -> throws
+  let tampered = false;
+  try {
+    const bad = blob.slice(0, -4) + 'AAAA';
+    await decryptBlob(bad, 'correct horse battery staple');
+  } catch (e) {
+    tampered = e instanceof SyncCryptoError;
+  }
+  check('tampered blob throws', tampered);
+  // two encrypts of same plaintext differ (random salt+iv)
+  const b2 = await encryptBlob('{"hello":"world"}', 'correct horse battery staple');
+  check('same plaintext -> different blobs (random salt/iv)', blob !== b2);
+  // decrypt b2 with same passphrase still works
+  check('decrypt second blob', (await decryptBlob(b2, 'correct horse battery staple')) === '{"hello":"world"}');
+}
+
+console.log('sync merge (union by id, LWW by timestamp, cap):');
+{
+  const mk = (id: string, expr: string, ts: number) => ({ id, expression: expr, result: 'r', timestamp: ts });
+  // union: disjoint ids -> all kept, sorted desc by timestamp
+  const a = [mk('1', '1+1', 100), mk('2', '2+2', 200)];
+  const b = [mk('3', '3+3', 150)];
+  const merged1 = mergeHistories(a, b);
+  check('union disjoint ids -> 3 entries', merged1.length === 3);
+  check('union sorted desc by timestamp', merged1[0].id === '2' && merged1[1].id === '3' && merged1[2].id === '1');
+  // duplicate id -> higher timestamp wins
+  const c = [mk('1', '1+1-old', 100)];
+  const d = [mk('1', '1+1-new', 300)];
+  const merged2 = mergeHistories(c, d);
+  check('dup id: higher ts wins', merged2.length === 1 && merged2[0].expression === '1+1-new');
+  // reverse order: local has newer
+  const merged3 = mergeHistories(d, c);
+  check('dup id: local newer wins', merged3.length === 1 && merged3[0].expression === '1+1-new');
+  // cap at SYNC_MAX_ENTRIES
+  const big = Array.from({ length: SYNC_MAX_ENTRIES + 50 }, (_, i) => mk(String(i), `e${i}`, i));
+  const merged4 = mergeHistories(big, []);
+  check('merge caps at SYNC_MAX_ENTRIES', merged4.length === SYNC_MAX_ENTRIES);
+  check('cap keeps newest', merged4[0].id === String(SYNC_MAX_ENTRIES + 49));
+  // empty + empty -> empty
+  check('empty merge', mergeHistories([], []).length === 0);
+}
+
+console.log('sync webdav preset (坚果云):');
+{
+  check('jianguoyun endpoint', JIANGUOYUN_PRESET.endpoint === 'https://dav.jianguoyun.com/dav/');
+  check('jianguoyun path', JIANGUOYUN_PRESET.path.startsWith('/calc/'));
+  check('jianguoyun password hint mentions 应用密码', JIANGUOYUN_PRESET.passwordHint.includes('应用密码'));
+  check('jianguoyun password hint warns not login password', JIANGUOYUN_PRESET.passwordHint.includes('非登录密码'));
+}
+
+console.log('sync webdav client (PROPFIND/GET/PUT/DELETE against fake server):');
+{
+  // in-memory WebDAV server: Map<urlPath, bodyString>
+  const store = new Map<string, string>();
+  const cfg = {
+    endpoint: JIANGUOYUN_PRESET.endpoint,
+    username: 'me@example.com',
+    password: 'app-password-xyz',
+    path: JIANGUOYUN_PRESET.path,
+  };
+  const authHeader = 'Basic ' + btoa(`${cfg.username}:${cfg.password}`);
+  const fakeFetch = async (url: string, init: any) => {
+    // strip endpoint prefix to get path
+    const path = url.startsWith(cfg.endpoint) ? url.slice(cfg.endpoint.length - 1) : url; // keep leading /
+    const method = init?.method ?? 'GET';
+    const reqAuth = init?.headers?.Authorization ?? init?.headers?.authorization;
+    if (reqAuth !== authHeader) {
+      return { ok: false, status: 401, statusText: 'Unauthorized', text: async () => 'auth' } as any;
+    }
+    if (method === 'PROPFIND') {
+      if (store.has(path)) return { ok: true, status: 207, statusText: 'Multi-Status', text: async () => '' } as any;
+      return { ok: false, status: 404, statusText: 'Not Found', text: async () => '' } as any;
+    }
+    if (method === 'GET') {
+      const body = store.get(path);
+      if (body === undefined) return { ok: false, status: 404, statusText: 'Not Found', text: async () => '' } as any;
+      return { ok: true, status: 200, statusText: 'OK', text: async () => body } as any;
+    }
+    if (method === 'PUT') {
+      // parent must exist (path = /calc/sync.bin; parent = /calc)
+      const parent = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      // ponytail: fake server treats root '/' as always-existing collection.
+      if (parent && parent !== '/' && !store.has(parent + '/') && !store.has(path)) {
+        return { ok: false, status: 409, statusText: 'Conflict', text: async () => '' } as any;
+      }
+      store.set(path, init.body);
+      return { ok: true, status: 204, statusText: 'No Content', text: async () => '' } as any;
+    }
+    if (method === 'MKCOL') {
+      store.set(path.endsWith('/') ? path : path + '/', '');
+      return { ok: true, status: 201, statusText: 'Created', text: async () => '' } as any;
+    }
+    if (method === 'DELETE') {
+      if (!store.has(path)) return { ok: false, status: 404, statusText: 'Not Found', text: async () => '' } as any;
+      store.delete(path);
+      return { ok: true, status: 204, statusText: 'No Content', text: async () => '' } as any;
+    }
+    return { ok: false, status: 405, statusText: 'Method Not Allowed', text: async () => '' } as any;
+  };
+  const provider = new WebDavSyncProvider(cfg, fakeFetch as any);
+
+  // PROPFIND on non-existent path -> exists() false
+  check('PROPFIND non-existent -> false', await provider.exists() === false);
+  // pull on non-existent -> null (no error)
+  check('pull non-existent -> null', (await provider.pull()) === null);
+  // push creates parent via 409 -> MKCOL -> PUT retry
+  await provider.push('hello-blob');
+  check('push wrote blob to server', store.get(cfg.path) === 'hello-blob');
+  // now exists -> true
+  check('PROPFIND existing -> true', await provider.exists() === true);
+  // pull -> the blob
+  check('pull returns blob', (await provider.pull()) === 'hello-blob');
+  // overwrite via second push
+  await provider.push('hello-v2');
+  check('push overwrites', store.get(cfg.path) === 'hello-v2');
+  // clear -> DELETE
+  await provider.clear();
+  check('clear removes blob', !store.has(cfg.path));
+  check('clear on missing is no-op (no throw)', await provider.clear().then(() => true));
+  // auth failure surfaces as error
+  const badProvider = new WebDavSyncProvider({ ...cfg, password: 'wrong' }, fakeFetch as any);
+  let authThrew = false;
+  try { await badProvider.pull(); } catch (e) { authThrew = e instanceof WebDavSyncError && e.status === 401; }
+  check('wrong password -> 401 WebDavSyncError', authThrew);
+}
+
+console.log('sync manager (full round-trip, two devices via shared WebDAV):');
+{
+  // shared fake server
+  const store = new Map<string, string>();
+  const mkCfg = () => ({
+    endpoint: JIANGUOYUN_PRESET.endpoint,
+    username: 'me@example.com',
+    password: 'app-password-xyz',
+    path: JIANGUOYUN_PRESET.path,
+  });
+  const authHeader = 'Basic ' + btoa('me@example.com:app-password-xyz');
+  const fakeFetch = async (url: string, init: any) => {
+    const path = url.startsWith(JIANGUOYUN_PRESET.endpoint) ? url.slice(JIANGUOYUN_PRESET.endpoint.length - 1) : url;
+    const method = init?.method ?? 'GET';
+    if ((init?.headers?.Authorization) !== authHeader) return { ok: false, status: 401, statusText: 'Unauthorized', text: async () => '' } as any;
+    if (method === 'PROPFIND') return { ok: store.has(path), status: store.has(path) ? 207 : 404, statusText: '', text: async () => '' } as any;
+    if (method === 'GET') {
+      const b = store.get(path);
+      return b === undefined ? { ok: false, status: 404, statusText: '', text: async () => '' } as any : { ok: true, status: 200, statusText: '', text: async () => b } as any;
+    }
+    if (method === 'PUT') { store.set(path, init.body); return { ok: true, status: 204, statusText: '', text: async () => '' } as any; }
+    if (method === 'DELETE') { store.delete(path); return { ok: true, status: 204, statusText: '', text: async () => '' } as any; }
+    return { ok: false, status: 405, statusText: '', text: async () => '' } as any;
+  };
+  // device A local store
+  let localA: import('../src/history/api').HistoryEntry[] = [
+    { id: 'a1', expression: '1+1', result: '2', timestamp: 1000 },
+    { id: 'a2', expression: '2+2', result: '4', timestamp: 2000 },
+  ];
+  // device B local store (has one different entry + one dup with older ts)
+  let localB: import('../src/history/api').HistoryEntry[] = [
+    { id: 'b1', expression: '5+5', result: '10', timestamp: 1500 },
+    { id: 'a2', expression: '2+2-OLD', result: '4', timestamp: 500 },
+  ];
+  const mgrA = new SyncManager(new WebDavSyncProvider(mkCfg(), fakeFetch as any), {
+    getLocal: () => localA, setLocal: (e) => { localA = e; }, passphrase: 'shared-secret',
+  });
+  const mgrB = new SyncManager(new WebDavSyncProvider(mkCfg(), fakeFetch as any), {
+    getLocal: () => localB, setLocal: (e) => { localB = e; }, passphrase: 'shared-secret',
+  });
+
+  // A syncs first: pushes encrypted blob with A's 2 entries
+  const rA = await mgrA.sync();
+  check('A sync ok', rA.ok);
+  check('A pushed 2 entries', rA.pushed === 2);
+  // server now holds an encrypted blob (not plaintext)
+  const onWire = store.get(JIANGUOYUN_PRESET.path);
+  check('server has blob', typeof onWire === 'string' && onWire.length > 0);
+  check('blob is not plaintext (no expression strings)', !onWire!.includes('1+1') && !onWire!.includes('expression'));
+
+  // B syncs: pulls A's blob, merges (union a1,a2,b1; a2 newer wins), pushes back merged
+  const rB = await mgrB.sync();
+  check('B sync ok', rB.ok);
+  check('B merged to 3 entries (union)', localB.length === 3);
+  check('B has a1', localB.some(e => e.id === 'a1'));
+  check('B has a2 (newer version)', localB.some(e => e.id === 'a2' && e.expression === '2+2'));
+  check('B has b1', localB.some(e => e.id === 'b1'));
+  check('B no stale a2-OLD', !localB.some(e => e.expression === '2+2-OLD'));
+  // B's merged set is sorted desc by timestamp (a2=2000, b1=1500, a1=1000)
+  check('B sorted desc by timestamp', localB[0].id === 'a2' && localB[1].id === 'b1' && localB[2].id === 'a1');
+
+  // A syncs again: pulls B's push (3 entries), merges -> 3 entries (no new)
+  const rA2 = await mgrA.sync();
+  check('A re-sync ok', rA2.ok);
+  check('A now has 3 entries (picked up b1)', localA.length === 3);
+  check('A has b1', localA.some(e => e.id === 'b1'));
+
+  // schedulePush debounces + coalesces; flushAndCancel drains the chain
+  localA.push({ id: 'a3', expression: '7+7', result: '14', timestamp: 3000 });
+  mgrA.schedulePush();
+  localA.push({ id: 'a4', expression: '8+8', result: '16', timestamp: 3100 });
+  mgrA.schedulePush();  // coalesces with previous
+  const flushRes = await mgrA.flushAndCancel();
+  check('debounced push flushed ok', flushRes.ok);
+  // server now has 4 entries (a1,a2,a3,a4,b1)
+  const rB2 = await mgrB.sync();
+  check('B picks up 2 new entries from A', localB.length === 5 && rB2.ok);
+
+  // wrong passphrase on pull -> SyncCryptoError surfaced as error result (not throw)
+  const mgrBad = new SyncManager(new WebDavSyncProvider(mkCfg(), fakeFetch as any), {
+    getLocal: () => [], setLocal: () => {}, passphrase: 'wrong-pass',
+  });
+  const rBad = await mgrBad.sync();
+  check('wrong passphrase sync -> not ok', !rBad.ok && !!rBad.error);
+
+  // clearRemote wipes server
+  const rClear = await mgrA.clearRemote();
+  check('clearRemote ok', rClear.ok);
+  check('server blob gone after clear', !store.has(JIANGUOYUN_PRESET.path));
+  // subsequent pull -> null
+  const providerOnly = new WebDavSyncProvider(mkCfg(), fakeFetch as any);
+  check('pull after clear -> null', (await providerOnly.pull()) === null);
+}
+
 console.log(`\n${passed} passed, 0 failed`);
