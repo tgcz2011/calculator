@@ -95,6 +95,35 @@ test.describe('Basic mode', () => {
     await expect(loc).toHaveAttribute('data-error', 'true');
   });
 
+  test('each error code renders a distinct glyph', async ({ page }) => {
+    const cases: Array<[string[], string, string]> = [
+      [['1', '+', '2', '*'], 'UNCLOSED', '\u2026'],
+      [['(', '1', '+', '2'], 'PAREN', ')'],
+      [['1', '+'], 'MISSING_OPERAND', '_'],
+    ];
+    for (const [keys, code, glyph] of cases) {
+      await tap(page, 'AC');
+      for (const k of keys) await tap(page, k);
+      const glyphEl = page.locator(`[data-error-code="${code}"] .error-glyph`);
+      await expect(glyphEl).toBeVisible();
+      await expect(glyphEl).toHaveText(glyph);
+    }
+  });
+
+  test('unknown symbol error renders ? glyph', async ({ page }) => {
+    await page.keyboard.type('foo+1');
+    const glyphEl = page.locator('[data-error-code="UNKNOWN_SYMBOL"] .error-glyph');
+    await expect(glyphEl).toBeVisible();
+    await expect(glyphEl).toHaveText('?');
+  });
+
+  test('not-function error renders ƒ glyph', async ({ page }) => {
+    await page.keyboard.type('xyz(1)');
+    const glyphEl = page.locator('[data-error-code="NOT_FUNCTION"] .error-glyph');
+    await expect(glyphEl).toBeVisible();
+    await expect(glyphEl).toHaveText('\u0192');
+  });
+
   test('AC clears expression', async ({ page }) => {
     for (const k of ['1', '2', '3', '+', '4', '5']) await tap(page, k);
     await tap(page, 'AC');
