@@ -158,6 +158,7 @@ export interface Calculator {
   state: State;
   live: string;
   liveError: string;
+  liveErrorCode: string;
   insert: (text: string) => void;
   backspace: () => void;
   clear: () => void;
@@ -188,6 +189,7 @@ export function useCalculator(): Calculator {
   }, [normalized, state.angle, state.historyVersion]);
   const liveResult = live.value && !live.error ? live.value : '';
   const liveError = live.error ?? '';
+  const liveErrorCode = live.errorCode ?? '';
 
   const insert = useCallback((text: string) => dispatch({ kind: 'insert', text }), []);
   const backspace = useCallback(() => dispatch({ kind: 'backspace' }), []);
@@ -230,6 +232,7 @@ export function useCalculator(): Calculator {
     state,
     live: liveResult,
     liveError,
+    liveErrorCode,
     insert,
     backspace,
     clear,

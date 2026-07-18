@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
 
 async function tap(page: Page, label: string) {
   await page.getByRole('button', { name: label, exact: true }).click();
@@ -6,6 +6,14 @@ async function tap(page: Page, label: string) {
 
 async function readResult(page: Page): Promise<string> {
   return (await page.locator("[aria-live='polite']").first().innerText()).trim();
+}
+
+async function resultLocator(page: Page): Promise<Locator> {
+  return page.locator("[aria-live='polite']").first();
+}
+
+async function errorCode(page: Page): Promise<string | null> {
+  return resultLocator(page).then((l) => l.getAttribute('data-error-code'));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -46,6 +54,45 @@ test.describe('Basic mode', () => {
   test('unmatched paren shows error message', async ({ page }) => {
     for (const k of ['(', '1', '+', '2']) await tap(page, k);
     await expect(readResult(page)).toMatch(/括号|Error|error|表达式/);
+  });
+
+  test('unmatched paren emits errorCode=PAREN', async ({ page }) => {
+    for (const k of ['(', '1', '+', '2']) await tap(page, k);
+    await expect.poll(async () => errorCode(page)).toBe('PAREN');
+  });
+
+  test('incomplete trailing operator emits errorCode=UNCLOSED', async ({ page }) => {
+    await page.keyboard.type('1+2*');
+    await expect.poll(async () => errorCode(page)).toBe('UNCLOSED');
+  });
+
+  test('trailing operator emits errorCode=MISSING_OPERAND', async ({ page }) => {
+    for (const k of ['1', '+']) await tap(page, k);
+    await expect.poll(async () => errorCode(page)).toBe('MISSING_OPERAND');
+  });
+
+  test('unknown identifier emits errorCode=UNKNOWN_SYMBOL', async ({ page }) => {
+    // Keypad has no letter keys; use keyboard to type letters.
+    await page.keyboard.type('foo+1');
+    await expect.poll(async () => errorCode(page)).toBe('UNKNOWN_SYMBOL');
+  });
+
+  test('unknown function emits errorCode=NOT_FUNCTION', async ({ page }) => {
+    await page.keyboard.type('xyz(1)');
+    await expect.poll(async () => errorCode(page)).toBe('NOT_FUNCTION');
+  });
+
+  test('clearing expression clears the error code', async ({ page }) => {
+    for (const k of ['1', '+']) await tap(page, k);
+    await expect.poll(async () => errorCode(page)).toBe('MISSING_OPERAND');
+    await tap(page, 'AC');
+    await expect.poll(async () => errorCode(page)).toBeNull();
+  });
+
+  test('error state is also exposed via data-error attribute', async ({ page }) => {
+    for (const k of ['1', '+']) await tap(page, k);
+    const loc = await resultLocator(page);
+    await expect(loc).toHaveAttribute('data-error', 'true');
   });
 
   test('AC clears expression', async ({ page }) => {
@@ -93,10 +140,7 @@ test.describe('Scientific mode', () => {
 
   test('factorial 5! = 120', async ({ page }) => {
     await tap(page, 'Scientific');
-    for (const k of ['5', 'x²']) await tap(page, k); // x² = ^2 (not factorial; skip)
-    // 5! is wired via gamma(n+1) under the hood. Test the underlying operator path.
-    await page.keyboard.press('Escape');
-    await tap(page, 'AC');
+    // Keypad has no `!`; type via keyboard.
     await page.keyboard.type('5!');
     await expect(readResult(page)).toBe('120');
   });

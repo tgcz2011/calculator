@@ -108,6 +108,7 @@ export default function App() {
             expression={calc.state.expression}
             result={calc.live}
             error={calc.liveError}
+            errorCode={calc.liveErrorCode}
             cursor={calc.state.cursor}
             onCursor={calc.setCursor}
             onBackspace={calc.backspace}
