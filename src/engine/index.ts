@@ -9,6 +9,9 @@ export interface EvalOptions {
 export interface EvalResult {
   value: string;
   error?: string;
+  // Optional stable code (UNCLOSED/PAREN/MISSING_OPERAND/UNKNOWN_SYMBOL/NOT_FUNCTION/CONVERT/ENGINE).
+  // UI can branch on code for typed error display; e2e asserts on it. Absent on success.
+  errorCode?: string;
 }
 export interface Engine {
   evaluate(expr: string, options?: EvalOptions): EvalResult;
@@ -19,9 +22,17 @@ export interface Engine {
 const math = create(all);
 const D2R = Math.PI / 180;
 
-// Module-level mode read by the trig overrides below. evaluate() swaps it
-// temporarily when options.angle is passed, then restores in finally.
-let mode: AngleMode = 'deg';
+// Options-only angle resolution: evaluate() pushes the resolved angle onto a
+// re-entrant stack; trig overrides read the top. No module-level `mode` global
+// that evaluate mutates -> no cross-call race. setAngleMode/getAngleMode only
+// control the default used when options.angle is absent (evaluate never writes it).
+// ponytail: stack is LIFO; single-threaded JS makes push/eval/pop atomic per call.
+const angleStack: AngleMode[] = [];
+let defaultAngle: AngleMode = 'deg';
+
+function currentAngle(): AngleMode {
+  return angleStack.length > 0 ? angleStack[angleStack.length - 1] : defaultAngle;
+}
 
 // Capture originals before overriding so DEG/RAD can layer on top of mathjs core.
 // ponytail: cast to (number)=>number; mathjs returns MathType but for real inputs it's a number.
@@ -35,12 +46,12 @@ const _atan = math.atan.bind(math) as (x: number) => number;
 math.import(
   {
     // DEG mode: convert input degrees -> radians for forward trig, output radians -> degrees for inverse.
-    sin: (x: number) => (mode === 'deg' ? _sin(x * D2R) : _sin(x)),
-    cos: (x: number) => (mode === 'deg' ? _cos(x * D2R) : _cos(x)),
-    tan: (x: number) => (mode === 'deg' ? _tan(x * D2R) : _tan(x)),
-    asin: (x: number) => (mode === 'deg' ? _asin(x) / D2R : _asin(x)),
-    acos: (x: number) => (mode === 'deg' ? _acos(x) / D2R : _acos(x)),
-    atan: (x: number) => (mode === 'deg' ? _atan(x) / D2R : _atan(x)),
+    sin: (x: number) => (currentAngle() === 'deg' ? _sin(x * D2R) : _sin(x)),
+    cos: (x: number) => (currentAngle() === 'deg' ? _cos(x * D2R) : _cos(x)),
+    tan: (x: number) => (currentAngle() === 'deg' ? _tan(x * D2R) : _tan(x)),
+    asin: (x: number) => (currentAngle() === 'deg' ? _asin(x) / D2R : _asin(x)),
+    acos: (x: number) => (currentAngle() === 'deg' ? _acos(x) / D2R : _acos(x)),
+    atan: (x: number) => (currentAngle() === 'deg' ? _atan(x) / D2R : _atan(x)),
     // ln alias -> natural log (mathjs log() with one arg is already natural log).
     ln: (x: number) => math.log(x)
   },
@@ -76,31 +87,31 @@ function classifyError(e: unknown): { error: string; code: string } {
   if (/Parenthesis/i.test(msg)) return { error: '括号不匹配', code: 'PAREN' };
   if (/Value expected/i.test(msg)) return { error: '缺少操作数', code: 'MISSING_OPERAND' };
   if (/Undefined symbol/i.test(msg)) return { error: `未知符号: ${msg.replace(/^.*:\s*/, '')}`, code: 'UNKNOWN_SYMBOL' };
-  if (/is not a function/i.test(msg)) return { error: '函数未定义', code: 'NOT_FUNCTION' };
+  if (/Undefined function|is not a function/i.test(msg)) return { error: '函数未定义', code: 'NOT_FUNCTION' };
   if (/Cannot convert/i.test(msg)) return { error: '类型无法转换', code: 'CONVERT' };
   return { error: msg, code: 'ENGINE' };
 }
 
 function evaluate(expr: string, options?: EvalOptions): EvalResult {
   if (!expr || !expr.trim()) return { value: '' };
-  const prev = mode;
-  if (options?.angle) mode = options.angle;
+  angleStack.push(options?.angle ?? defaultAngle);
   try {
     const result = math.evaluate(normalize(expr));
     if (result === undefined || result === null) return { value: '' };
     return { value: formatResult(result) };
   } catch (e) {
-    return { value: '', error: classifyError(e).error };
+    const cls = classifyError(e);
+    return { value: '', error: cls.error, errorCode: cls.code };
   } finally {
-    mode = prev;
+    angleStack.pop();
   }
 }
 
 function setAngleMode(m: AngleMode): void {
-  mode = m;
+  defaultAngle = m;
 }
 function getAngleMode(): AngleMode {
-  return mode;
+  return defaultAngle;
 }
 
 export const engine: Engine = { evaluate, setAngleMode, getAngleMode };

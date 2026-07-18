@@ -65,6 +65,14 @@ check('unclosed paren errors', !!engine.evaluate('(1+2').error);
 check('missing operand errors', !!engine.evaluate('1+').error);
 check('unknown symbol errors', !!engine.evaluate('foo(1)').error);
 check('empty expr -> empty value', engine.evaluate('').value === '');
+check('errorCode UNCLOSED on trailing operator', engine.evaluate('1+').errorCode === 'UNCLOSED');
+check('errorCode PAREN on unbalanced paren', engine.evaluate('(1+2').errorCode === 'PAREN');
+check('errorCode NOT_FUNCTION on undefined fn', engine.evaluate('foo(1)').errorCode === 'NOT_FUNCTION');
+check('errorCode absent on success', engine.evaluate('1+2').errorCode === undefined);
+check('options-only: global setAngleMode(rad) does not leak into evaluate with angle:deg',
+  (() => { engine.setAngleMode('rad'); const r = engine.evaluate('sin(30)', { angle: 'deg' }).value === '0.5'; engine.setAngleMode('deg'); return r; })()
+);
+check('default angle used when options absent', engine.getAngleMode() === 'deg' && engine.evaluate('sin(30)').value === '0.5');
 
 console.log('history contract (LocalStorage):');
 history.clear();
