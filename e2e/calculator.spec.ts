@@ -17,6 +17,10 @@ async function errorCode(page: Page): Promise<string | null> {
 }
 
 test.beforeEach(async ({ page }) => {
+  // ponytail: goto before clear - localStorage.clear() on about:blank (opaque
+  // origin) throws SecurityError on Chromium 131+. Navigate to origin, clear,
+  // then navigate again so the app boots against empty storage.
+  await page.goto('/');
   await page.evaluate(() => {
     localStorage.clear();
   });
