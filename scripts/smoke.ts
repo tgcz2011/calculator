@@ -386,4 +386,34 @@ console.log('sync manager (full round-trip, two devices via shared WebDAV):');
   check('pull after clear -> null', (await providerOnly.pull()) === null);
 }
 
+console.log('date math:');
+{
+  // Mirror the helpers in src/components/DateTime.tsx. Anchoring at UTC noon dodges DST edges.
+  function parseIso(s: string): Date {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)!;
+    return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12));
+  }
+  function diffDays(a: Date, b: Date): number {
+    return Math.round((a.getTime() - b.getTime()) / 86400000);
+  }
+  function addDays(d: Date, n: number): Date {
+    return new Date(d.getTime() + n * 86400000);
+  }
+  function formatIso(d: Date): string {
+    const y = d.getUTCFullYear();
+    const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = d.getUTCDate().toString().padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  check('diff A - B = 14 days', diffDays(parseIso('2025-01-15'), parseIso('2025-01-01')) === 14);
+  check('diff A - B = -14 days (reversed)', diffDays(parseIso('2025-01-01'), parseIso('2025-01-15')) === -14);
+  check('add 30 days to 2025-01-01 = 2025-01-31', formatIso(addDays(parseIso('2025-01-01'), 30)) === '2025-01-31');
+  check('add -15 to 2025-03-01 = 2025-02-14', formatIso(addDays(parseIso('2025-03-01'), -15)) === '2025-02-14');
+  check('cross month: +1 to 2025-01-31 = 2025-02-01', formatIso(addDays(parseIso('2025-01-31'), 1)) === '2025-02-01');
+  check('cross year: +1 to 2025-12-31 = 2026-01-01', formatIso(addDays(parseIso('2025-12-31'), 1)) === '2026-01-01');
+  check('leap year: 2024-02-28 +1 = 2024-02-29', formatIso(addDays(parseIso('2024-02-28'), 1)) === '2024-02-29');
+  check('non-leap: 2025-02-28 +1 = 2025-03-01', formatIso(addDays(parseIso('2025-02-28'), 1)) === '2025-03-01');
+  check('weekday of 2025-01-01 is Wednesday (UTC)', parseIso('2025-01-01').getUTCDay() === 3);
+}
+
 console.log(`\n${passed} passed, 0 failed`);

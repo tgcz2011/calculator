@@ -286,3 +286,61 @@ test.describe('Sync settings panel', () => {
     await expect(page.getByTestId('sync-endpoint')).toHaveCount(0);
   });
 });
+test.describe('Date / Time mode', () => {
+  test('Date tab is the last tab in the order', async ({ page }) => {
+    const tabs = page.getByRole('tab');
+    await expect(tabs.last()).toHaveText('Date');
+  });
+
+  test('switching to Date hides Display and Keypad', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await expect(page.getByTestId('date-mode')).toBeVisible();
+    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+  });
+
+  test('diff sub-tab computes days between two dates', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByTestId('date-a').fill('2025-01-01');
+    await page.getByTestId('date-b').fill('2025-01-15');
+    await expect(page.getByTestId('date-diff-days')).toHaveText('+14 天');
+  });
+
+  test('diff is negative when A is before B', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByTestId('date-a').fill('2025-01-15');
+    await page.getByTestId('date-b').fill('2025-01-01');
+    await expect(page.getByTestId('date-diff-days')).toHaveText('-14 天');
+  });
+
+  test('add/sub adds days to a base date', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '加减' }).click();
+    await page.getByTestId('date-base').fill('2025-01-01');
+    await page.getByTestId('date-offset').fill('30');
+    await expect(page.getByTestId('date-addsub-result-iso')).toHaveText('2025-01-31');
+  });
+
+  test('add/sub with negative offset goes backward', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '加减' }).click();
+    await page.getByTestId('date-base').fill('2025-03-01');
+    await page.getByTestId('date-offset').fill('-15');
+    await expect(page.getByTestId('date-addsub-result-iso')).toHaveText('2025-02-14');
+  });
+
+  test('weekday sub-tab shows the weekday name', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '星期' }).click();
+    await page.getByTestId('date-weekday-input').fill('2025-01-01');
+    await expect(page.getByTestId('date-weekday-zh')).toHaveText('星期三');
+    await expect(page.getByTestId('date-weekday-en')).toHaveText('Wednesday');
+  });
+
+  test('today button fills current date', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '星期' }).click();
+    const today = new Date().toISOString().slice(0, 10);
+    await page.getByTestId('date-today').click();
+    await expect(page.getByTestId('date-weekday-input')).toHaveValue(today);
+  });
+});
