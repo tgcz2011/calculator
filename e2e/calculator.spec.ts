@@ -213,3 +213,76 @@ test.describe('Responsive shell', () => {
     expect(['phone', 'tablet', 'desktop']).toContain(tier);
   });
 });
+
+test.describe('Sync settings panel', () => {
+  test('opens via gear button', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await expect(page.getByTestId('sync-settings')).toBeVisible();
+    await expect(page.getByTestId('sync-status')).toBeVisible();
+  });
+
+  test('坚果云 preset prefills endpoint + path + shows app-password hint', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await expect(page.getByTestId('sync-endpoint')).toHaveValue('https://dav.jianguoyun.com/dav/');
+    await expect(page.getByTestId('sync-path')).toHaveValue('/calc/sync.bin');
+    await expect(page.getByText(/应用密码 - 在 jianguoyun\.com/)).toBeVisible();
+  });
+
+  test('switching to WebDAV clears the endpoint', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await page.getByRole('radio', { name: 'WebDAV' }).check();
+    await expect(page.getByTestId('sync-endpoint')).toHaveValue('');
+  });
+
+  test('connect button is disabled until all fields are valid', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    const connect = page.getByTestId('sync-connect');
+    await expect(connect).toBeDisabled();
+    await page.getByTestId('sync-username').fill('alice@example.com');
+    await page.getByTestId('sync-password').fill('app-password-123');
+    await page.getByTestId('sync-passphrase').fill('short');
+    await expect(connect).toBeDisabled();
+    await page.getByTestId('sync-passphrase').fill('correct-horse-battery');
+    await page.getByTestId('sync-passphrase-confirm').fill('correct-horse-battery');
+    await expect(connect).toBeEnabled();
+  });
+
+  test('passphrase mismatch shows error', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await page.getByTestId('sync-username').fill('alice@example.com');
+    await page.getByTestId('sync-password').fill('app-password-123');
+    await page.getByTestId('sync-passphrase').fill('correct-horse-battery');
+    await page.getByTestId('sync-passphrase-confirm').fill('different');
+    await expect(page.getByText(/两次输入不一致/)).toBeVisible();
+  });
+
+  test('config persists, passphrase does not', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await page.getByTestId('sync-username').fill('alice@example.com');
+    await page.reload();
+    await page.getByTestId('open-sync-settings').click();
+    await expect(page.getByTestId('sync-username')).toHaveValue('alice@example.com');
+    await expect(page.getByTestId('sync-passphrase')).toHaveValue('');
+  });
+
+  test('close button dismisses the panel', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await page.getByRole('button', { name: '关闭' }).click();
+    await expect(page.getByTestId('sync-settings')).toBeHidden();
+  });
+
+  test('clicking the backdrop closes the panel', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    // click in the backdrop area (top-left corner of the dialog)
+    await page.mouse.click(5, 5);
+    await expect(page.getByTestId('sync-settings')).toBeHidden();
+  });
+
+  test('iCloud shows waiting-for-native message', async ({ page }) => {
+    await page.getByTestId('open-sync-settings').click();
+    await page.getByRole('radio', { name: 'iCloud' }).check();
+    await expect(page.getByText(/iCloud 同步等待原生 bridge/)).toBeVisible();
+    // No WebDAV-specific fields under iCloud
+    await expect(page.getByTestId('sync-endpoint')).toHaveCount(0);
+  });
+});
