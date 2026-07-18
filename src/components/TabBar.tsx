@@ -38,6 +38,9 @@ export function TabBar({ mode, angle, onMode, onAngle }: Props) {
         <Tab active={mode === 'history'} onClick={() => onMode('history')}>
           History
         </Tab>
+        <Tab active={mode === 'date'} onClick={() => onMode('date')}>
+          Date
+        </Tab>
       </div>
       <button
         type="button"
