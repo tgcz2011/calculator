@@ -3,6 +3,7 @@ import { Display } from './components/Display';
 import { Keypad } from './components/Keypad';
 import { TabBar } from './components/TabBar';
 import { HistoryList } from './components/HistoryList';
+import { SyncSettings } from './components/SyncSettings';
 import { useCalculator } from './state/useCalculator';
 import { useKeyboard } from './native/keyboard';
 import { isIOS, isDesktop, isMobileNative, isWeb } from './native/platform';
@@ -38,6 +39,7 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
 export default function App() {
   const calc = useCalculator();
   const tier = useShellWidth();
+  const [syncOpen, setSyncOpen] = useState(false);
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -96,12 +98,46 @@ export default function App() {
       data-tier={tier}
       data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
     >
-      <TabBar
-        mode={calc.state.mode}
-        angle={calc.state.angle}
-        onMode={calc.setMode}
-        onAngle={calc.setAngle}
-      />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          justifyContent: 'space-between',
+          gap: 'var(--s-2)',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <TabBar
+            mode={calc.state.mode}
+            angle={calc.state.angle}
+            onMode={calc.setMode}
+            onAngle={calc.setAngle}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setSyncOpen(true)}
+          aria-label="同步设置"
+          data-testid="open-sync-settings"
+          style={{
+            margin: 'var(--s-3) var(--s-4) var(--s-3) 0',
+            padding: '6px 12px',
+            borderRadius: 'var(--radius-full)',
+            background: 'var(--key-fn-bg)',
+            color: 'var(--key-fn-fg)',
+            fontSize: 13,
+            fontWeight: 600,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            height: 32,
+            alignSelf: 'flex-start',
+          }}
+        >
+          <span aria-hidden style={{ fontSize: 16 }}>{'\u2699'}</span>
+          <span>同步</span>
+        </button>
+      </div>
       {calc.state.mode !== 'history' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Display
@@ -143,6 +179,7 @@ export default function App() {
           Tap AC to clear · long-press AC to reset
         </div>
       )}
+      <SyncSettings open={syncOpen} onClose={() => setSyncOpen(false)} />
     </main>
   );
 }
