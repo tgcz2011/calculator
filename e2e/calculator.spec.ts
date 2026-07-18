@@ -412,3 +412,109 @@ test.describe('Units + Currency mode', () => {
     await expect(page.getByTestId('units-result-value')).toContainText('EUR');
   });
 });
+
+test.describe('Programmer mode', () => {
+  test('Programmer tab is the 4th tab in the locked order', async ({ page }) => {
+    const labels = await page.getByRole('tab').allTextContents();
+    // locked: Basic / Scientific / History / Programmer / Units / Date
+    expect(labels).toEqual(['Basic', 'Scientific', 'History', 'Programmer', 'Units', 'Date']);
+  });
+
+  test('switching to Programmer hides the basic Display + Keypad', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await expect(page.getByTestId('programmer-mode')).toBeVisible();
+    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+  });
+
+  test('HEX is the default radix and QWORD is the default word size', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await expect(page.getByTestId('prog-radix-hex')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('prog-word-64')).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('hex letters A-F appear only when HEX is selected', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await expect(page.getByTestId('prog-key-A')).toBeVisible();
+    await page.getByTestId('prog-radix-dec').click();
+    await expect(page.getByTestId('prog-key-A')).toHaveCount(0);
+    await page.getByTestId('prog-radix-hex').click();
+    await expect(page.getByTestId('prog-key-A')).toBeVisible();
+  });
+
+  test('non-allowed digits are disabled per radix (8/9 in BIN; A-F in DEC)', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    // HEX: all enabled
+    await expect(page.getByTestId('prog-key-8')).toBeEnabled();
+    await expect(page.getByTestId('prog-key-A')).toBeEnabled();
+    // BIN: 8/9 disabled
+    await page.getByTestId('prog-radix-bin').click();
+    await expect(page.getByTestId('prog-key-8')).toBeDisabled();
+    await expect(page.getByTestId('prog-key-9')).toBeDisabled();
+    // DEC: A-F disabled
+    await page.getByTestId('prog-radix-dec').click();
+    await expect(page.getByTestId('prog-key-A')).toHaveCount(0);
+  });
+
+  test('FF + 1 = 100 in HEX QWORD', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-add').click();
+    await page.getByTestId('prog-key-1').click();
+    await page.getByTestId('prog-key-eq').click();
+    // HEX primary, padded to 16 chars (QWORD)
+    await expect(page.getByTestId('prog-primary')).toContainText('0000000000000100');
+  });
+
+  test('radix table shows HEX/DEC/OCT/BIN all simultaneously', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-F').click();
+    // 0xFF = 255 dec = 0o377 = 0b11111111
+    await expect(page.getByTestId('prog-radix-hex-value')).toContainText('FF');
+    await expect(page.getByTestId('prog-radix-dec-value')).toContainText('255');
+    await expect(page.getByTestId('prog-radix-oct-value')).toContainText('377');
+    await expect(page.getByTestId('prog-radix-bin-value')).toContainText('11111111');
+  });
+
+  test('switching radix reformats the last token via toRadix', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByTestId('prog-key-1').click();
+    await page.getByTestId('prog-key-0').click(); // "10" in HEX = 16 dec
+    await page.getByTestId('prog-radix-dec').click();
+    // Now the same value reformatted to DEC: "10" (hex) = 16 dec -> expr shows "16"
+    await expect(page.getByTestId('prog-expr')).toContainText('16');
+  });
+
+  test('switching word size re-masks (QWORD vs BYTE)', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-F').click();
+    // QWORD: FF as HEX
+    await expect(page.getByTestId('prog-radix-hex-value')).toContainText('00000000000000FF');
+    // Switch to BYTE: 0xFF truncated to 8 bits still 0xFF
+    await page.getByTestId('prog-word-8').click();
+    await expect(page.getByTestId('prog-radix-hex-value')).toContainText('FF');
+    // DEC at BYTE: 255
+    await expect(page.getByTestId('prog-radix-dec-value')).toContainText('255');
+  });
+
+  test('bitwise AND: 0xF0 & 0x0F = 0', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-0').click();
+    await page.getByTestId('prog-key-and').click();
+    await page.getByTestId('prog-key-0').click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-eq').click();
+    await expect(page.getByTestId('prog-radix-hex-value')).toMatch(/^0+$/);
+  });
+
+  test('AC clears expression', async ({ page }) => {
+    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-F').click();
+    await page.getByTestId('prog-key-ac').click();
+    await expect(page.getByTestId('prog-expr')).toBeEmpty();
+  });
+});

@@ -27,6 +27,8 @@ export function TabBar({ mode, angle, onMode, onAngle }: Props) {
           background: 'var(--key-fn-bg)',
           borderRadius: 'var(--r-full)',
           padding: 2,
+          overflowX: 'auto',
+          maxWidth: '100%',
         }}
       >
         <Tab active={mode === 'basic'} onClick={() => onMode('basic')}>
@@ -37,6 +39,9 @@ export function TabBar({ mode, angle, onMode, onAngle }: Props) {
         </Tab>
         <Tab active={mode === 'history'} onClick={() => onMode('history')}>
           History
+        </Tab>
+        <Tab active={mode === 'programmer'} onClick={() => onMode('programmer')}>
+          Programmer
         </Tab>
         <Tab active={mode === 'units'} onClick={() => onMode('units')}>
           Units

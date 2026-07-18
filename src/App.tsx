@@ -6,6 +6,7 @@ import { HistoryList } from './components/HistoryList';
 import { SyncSettings } from './components/SyncSettings';
 import { DateTime } from './components/DateTime';
 import { Units } from './components/Units';
+import { Programmer } from './components/Programmer';
 import { useCalculator } from './state/useCalculator';
 import { useKeyboard } from './native/keyboard';
 import { isIOS, isDesktop, isMobileNative, isWeb } from './native/platform';
@@ -140,7 +141,7 @@ export default function App() {
           <span>同步</span>
         </button>
       </div>
-      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && (
+      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Display
             expression={calc.state.expression}
@@ -168,6 +169,8 @@ export default function App() {
         <DateTime />
       ) : calc.state.mode === 'units' ? (
         <Units />
+      ) : calc.state.mode === 'programmer' ? (
+        <Programmer />
       ) : (
         <Keypad
           scientific={calc.state.mode === 'scientific'}
