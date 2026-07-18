@@ -1,22 +1,55 @@
 // Canonical engine contract. Locked by Leader: UI depends on this exact shape.
 // Source of truth for Minimax-M3's UI. Swap implementation freely, never the signature.
 import { create, all } from 'mathjs';
+import {
+  evalProgrammer,
+  primaryValue,
+  radixRepr,
+  toRadix as toRadixFn,
+  ProgrammerError
+} from './programmer';
 
 export type AngleMode = 'deg' | 'rad';
+
+// --- Programmer mode (P1) ---
+export type Radix = 2 | 8 | 10 | 16;
+export type WordSize = 8 | 16 | 32 | 64; // BYTE / WORD / DWORD / QWORD
+export interface ProgrammerState {
+  radix: Radix;
+  wordSize: WordSize;
+}
+export interface RadixRepr {
+  hex: string; // unsigned bit pattern, uppercase, no prefix, UNPADDED (UI pads to wordSize/4)
+  dec: string; // signed decimal (MSB = sign within wordSize)
+  oct: string; // unsigned, unpadded
+  bin: string; // unsigned, no grouping, UNPADDED (UI pads to wordSize bits)
+}
+
 export interface EvalOptions {
   angle?: AngleMode;
+  // Programmer mode: presence of radix/wordSize routes to the BigInt evaluator.
+  radix?: Radix; // input radix for bare integer literals
+  wordSize?: WordSize; // bit width for masking + shifts (default 64 = QWORD)
 }
 export interface EvalResult {
-  value: string;
+  value: string; // primary display: signed dec for radix 10, else unsigned in input radix
   error?: string;
-  // Optional stable code (UNCLOSED/PAREN/MISSING_OPERAND/UNKNOWN_SYMBOL/NOT_FUNCTION/CONVERT/ENGINE).
-  // UI can branch on code for typed error display; e2e asserts on it. Absent on success.
+  // Optional stable code (UNCLOSED/PAREN/MISSING_OPERAND/UNKNOWN_SYMBOL/NOT_FUNCTION/CONVERT/ENGINE,
+  // plus programmer: INVALID_DIGIT/DIV_ZERO/SYNTAX). UI can branch on code for typed error
+  // display; e2e asserts on it. Absent on success.
   errorCode?: string;
+  // Programmer mode: all-radix reps. Present whenever radix/wordSize option is used.
+  radix?: RadixRepr;
 }
 export interface Engine {
   evaluate(expr: string, options?: EvalOptions): EvalResult;
   setAngleMode(mode: AngleMode): void;
   getAngleMode(): AngleMode;
+  // Programmer mode (P1). setProgrammer sets defaults used when options omit them.
+  setProgrammer(state: Partial<ProgrammerState>): void;
+  getProgrammer(): ProgrammerState;
+  // Pure conversion of a decimal string to all-radix reps (for UI radix switch without re-eval).
+  toRadix(decimal: string, wordSize?: WordSize): RadixRepr;
 }
 
 const math = create(all);
@@ -29,6 +62,10 @@ const D2R = Math.PI / 180;
 // ponytail: stack is LIFO; single-threaded JS makes push/eval/pop atomic per call.
 const angleStack: AngleMode[] = [];
 let defaultAngle: AngleMode = 'deg';
+
+// Programmer-mode defaults. evaluate() never mutates these (options-only, same
+// pattern as angle); setProgrammer just changes the fallback for absent options.
+let defaultProgrammer: ProgrammerState = { radix: 16, wordSize: 64 };
 
 function currentAngle(): AngleMode {
   return angleStack.length > 0 ? angleStack[angleStack.length - 1] : defaultAngle;
@@ -94,6 +131,22 @@ function classifyError(e: unknown): { error: string; code: string } {
 
 function evaluate(expr: string, options?: EvalOptions): EvalResult {
   if (!expr || !expr.trim()) return { value: '' };
+
+  // Programmer mode: radix or wordSize present -> BigInt path (QWORD-exact).
+  if (options?.radix || options?.wordSize) {
+    const radix = options.radix ?? defaultProgrammer.radix;
+    const wordSize = options.wordSize ?? defaultProgrammer.wordSize;
+    try {
+      const unsigned = evalProgrammer(expr, radix, wordSize);
+      return { value: primaryValue(unsigned, radix, wordSize), radix: radixRepr(unsigned, wordSize) };
+    } catch (e) {
+      if (e instanceof ProgrammerError) return { value: '', error: e.message, errorCode: e.code };
+      const cls = classifyError(e);
+      return { value: '', error: cls.error, errorCode: cls.code };
+    }
+  }
+
+  // Basic/scientific: mathjs path.
   angleStack.push(options?.angle ?? defaultAngle);
   try {
     const result = math.evaluate(normalize(expr));
@@ -114,4 +167,15 @@ function getAngleMode(): AngleMode {
   return defaultAngle;
 }
 
-export const engine: Engine = { evaluate, setAngleMode, getAngleMode };
+function setProgrammer(s: Partial<ProgrammerState>): void {
+  if (s.radix !== undefined) defaultProgrammer.radix = s.radix;
+  if (s.wordSize !== undefined) defaultProgrammer.wordSize = s.wordSize;
+}
+function getProgrammer(): ProgrammerState {
+  return { ...defaultProgrammer };
+}
+function toRadix(decimal: string, wordSize?: WordSize): RadixRepr {
+  return toRadixFn(decimal, wordSize ?? defaultProgrammer.wordSize);
+}
+
+export const engine: Engine = { evaluate, setAngleMode, getAngleMode, setProgrammer, getProgrammer, toRadix };
