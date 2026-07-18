@@ -4,6 +4,7 @@ interface Props {
   expression: string;
   result: string;
   error: string;
+  errorCode?: string;
   cursor: number;
   onCursor(pos: number): void;
   onBackspace(): void;
@@ -83,6 +84,8 @@ export function Display(props: Props) {
     fontVariantNumeric: 'tabular-nums',
     overflowWrap: 'break-word',
     wordBreak: 'break-all',
+    // ponytail: trim huge font on error so "Mismatched parentheses" doesn't overflow.
+    ...(props.error ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
   };
 
   return (
@@ -102,7 +105,12 @@ export function Display(props: Props) {
         aria-label="Expression"
         style={exprStyle}
       />
-      <div style={resultStyle} aria-live="polite">
+      <div
+        style={resultStyle}
+        aria-live="polite"
+        data-error-code={props.error && props.errorCode ? props.errorCode : undefined}
+        data-error={props.error ? 'true' : undefined}
+      >
         {props.error ? props.error : props.result || '\u00a0'}
       </div>
     </div>
