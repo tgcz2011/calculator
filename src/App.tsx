@@ -66,11 +66,26 @@ export default function App() {
         else calc.allClear();
         return;
       }
+      // ponytail: letters a-z / A-Z insert as-is so users can type identifiers
+      // (foo+1 -> UNKNOWN_SYMBOL) and unknown functions (xyz(1) -> NOT_FUNCTION).
+      // We DON'T map 'x'/'X' to '×' anymore — the engine's normalize() rewrites
+      // every '×' to '*' (src/engine/index.ts:102), which collapses identifier-
+      // leading '×' and breaks the unknown-function classification. '*' / '×'
+      // button still work for multiplication.
+      const letterMap: Record<string, string> = {};
+      for (let c = 0; c < 26; c++) {
+        const lower = String.fromCharCode(97 + c);
+        const upper = String.fromCharCode(65 + c);
+        letterMap[lower] = lower;
+        letterMap[upper] = upper;
+      }
       const map: Record<string, string> = {
+        ...letterMap,
         '0': '0', '1': '1', '2': '2', '3': '3', '4': '4',
         '5': '5', '6': '6', '7': '7', '8': '8', '9': '9',
         '.': '.', ',': '.', '+': '+', '-': '-', '*': '×',
-        '/': '÷', 'x': '×', 'X': '×', '(': '(', ')': ')',
+        '/': '÷', '(': '(', ')': ')',
+        '!': '!', '^': '^',
       };
       const insert = map[e.key];
       if (insert) {
