@@ -1,15 +1,35 @@
 import { test, expect, type Page } from '@playwright/test';
 
 // ponytail: separate spec so this branch doesn't conflict with the regression
-// fix General is landing in calculator.spec.ts (beforeEach localStorage.clear()
-// on about:blank). One file, one job — keyboard extras only.
+// fix landing in calculator.spec.ts (beforeEach localStorage.clear() on
+// about:blank). One file, one job — keyboard extras only.
+//
+// Same `tap` mapping as calculator.spec.ts: KeypadButton exposes accessible
+// names via aria-label (e.g. '+' -> 'Add'), so `getByRole('button', {name:'+'})`
+// doesn't match. Use the aria-label name (or tab name for tabs).
 
-async function tap(page: Page, label: string) {
-  await page.getByRole('button', { name: label, exact: true }).click();
+const ARIA_OP: Record<string, string> = {
+  '+': 'Add', '−': 'Subtract', '×': 'Multiply', '÷': 'Divide',
+  '%': 'Percent', '±': 'Negate', '=': 'Equals',
+  AC: 'All clear',
+  'x²': 'Square', 'xʸ': 'Exponent',
+  sin: 'Sine', cos: 'Cosine', tan: 'Tangent',
+  π: 'Pi', ln: 'Natural log', log: 'Log base 10',
+  '√': 'Square root', e: 'Euler number',
+  '(': 'Open parenthesis', ')': 'Close parenthesis',
+};
+
+async function tap(page: Page, label: string): Promise<void> {
+  const accessible = ARIA_OP[label] ?? label;
+  await page.getByRole('button', { name: accessible, exact: true }).click();
+}
+
+function expressionLocator(page: Page) {
+  return page.locator('input[aria-label="Expression"]');
 }
 
 async function expressionText(page: Page): Promise<string> {
-  return page.locator('input[aria-label="Expression"]').inputValue();
+  return expressionLocator(page).inputValue();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -23,29 +43,29 @@ test.beforeEach(async ({ page }) => {
 test.describe('Keyboard extras', () => {
   test('Ctrl+Z undoes last insert', async ({ page }) => {
     for (const k of ['1', '2', '+', '3']) await tap(page, k);
-    await expect(expressionText(page)).toContain('12+3');
+    await expect(expressionText(page)).resolves.toContain('12+3');
     await page.keyboard.press('Control+z');
-    await expect(expressionText(page)).toContain('12+');
+    await expect(expressionText(page)).resolves.toContain('12+');
     await page.keyboard.press('Control+z');
-    await expect(expressionText(page)).toContain('12');
+    await expect(expressionText(page)).resolves.toContain('12');
   });
 
   test('Ctrl+Shift+Z redoes', async ({ page }) => {
     for (const k of ['4', '+', '5']) await tap(page, k);
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
-    await expect(expressionText(page)).toBe('4');
+    await expect(expressionText(page)).resolves.toBe('4');
     await page.keyboard.press('Control+Shift+z');
-    await expect(expressionText(page)).toContain('4+');
+    await expect(expressionText(page)).resolves.toContain('4+');
     await page.keyboard.press('Control+Shift+z');
-    await expect(expressionText(page)).toContain('4+5');
+    await expect(expressionText(page)).resolves.toContain('4+5');
   });
 
   test('Ctrl+Y redoes (Windows-style)', async ({ page }) => {
     for (const k of ['7', '+', '8']) await tap(page, k);
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+y');
-    await expect(expressionText(page)).toContain('7+8');
+    await expect(expressionText(page)).resolves.toContain('7+8');
   });
 
   test('Ctrl+3 switches to History mode', async ({ page }) => {
@@ -95,7 +115,7 @@ test.describe('Keyboard extras', () => {
     // but should re-anchor the next insert at position 3.
     await page.keyboard.press('ArrowLeft');
     await tap(page, '+');
-    await expect(expressionText(page)).toBe('123+4');
+    await expect(expressionText(page)).resolves.toBe('123+4');
   });
 
   test('ArrowLeft at start is a no-op (no crash, no negative cursor)', async ({ page }) => {
@@ -104,6 +124,6 @@ test.describe('Keyboard extras', () => {
     await page.keyboard.press('ArrowLeft');
     await tap(page, '8');
     // Cursor at 0; insert 8 -> "87"
-    await expect(expressionText(page)).toBe('87');
+    await expect(expressionText(page)).resolves.toBe('87');
   });
 });
