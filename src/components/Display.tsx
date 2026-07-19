@@ -88,7 +88,7 @@ export function Display(props: Props) {
     width: '1.6em',
     height: '1.6em',
     marginRight: '0.4em',
-    borderRadius: '9999px',
+    borderRadius: 'var(--radius-full)',
     background: 'var(--danger-soft)',
     color: 'var(--danger)',
     fontSize: '0.8em',
@@ -126,12 +126,20 @@ export function Display(props: Props) {
     fontVariantNumeric: 'tabular-nums',
     overflowWrap: 'break-word',
     wordBreak: 'break-all',
+    flexShrink: 0,
     // ponytail: trim huge font on error so "Mismatched parentheses" doesn't overflow.
     ...(props.error ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
   };
 
+  // ponytail: previous layout used `justify-content: flex-end` to push input + result
+  // to the bottom of the display column. When the display column got squeezed on
+  // desktop (large --display-fs * 1.2em minHeight > available space), the children
+  // overflowed UPWARD past the container, pushing the input on top of the tab bar.
+  // Fix: stack normally (top-down), push only the result to the bottom with
+  // margin-top: auto. Overflow now goes downward into the keypad (which is clipped
+  // by .shell overflow: hidden on desktop) instead of into the top bar.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <input
         ref={ref}
         value={props.expression || (props.error ? props.error : '0')}
@@ -148,7 +156,7 @@ export function Display(props: Props) {
         style={exprStyle}
       />
       <div
-        style={resultStyle}
+        style={{ ...resultStyle, marginTop: 'auto' }}
         aria-live="polite"
         data-error-code={props.error && props.errorCode ? props.errorCode : undefined}
         data-error={props.error ? 'true' : undefined}

@@ -8,9 +8,12 @@
 // is mode-local, and the engine.evaluate path differs (options-driven BigInt
 // vs mathjs). Self-contained state keeps the mode's contract crisp.
 
-import { type CSSProperties, useEffect, useReducer, useState } from 'react';
+import { type ReactNode, useEffect, useReducer, useState } from 'react';
 import { engine, type Radix, type WordSize, type RadixRepr } from '../engine';
 import { history } from '../history/api';
+import { Key } from './Key';
+import { Chip, ChipSegment } from './Chip';
+import { Panel } from './Panel';
 
 const RADIXES: { id: Radix; label: string; prefix: string }[] = [
   { id: 16, label: 'HEX', prefix: '0x' },
@@ -205,9 +208,11 @@ export function Programmer() {
         {RADIXES.map((r) => (
           <Chip
             key={r.id}
+            role="radio"
             active={radix === r.id}
             onClick={() => onSwitchRadix(r.id)}
             testId={`prog-radix-${r.label.toLowerCase()}`}
+            fill
           >
             {r.label}
           </Chip>
@@ -218,9 +223,11 @@ export function Programmer() {
         {WORD_SIZES.map((w) => (
           <Chip
             key={w.id}
+            role="radio"
             active={wordSize === w.id}
             onClick={() => onSwitchWordSize(w.id)}
             testId={`prog-word-${w.id}`}
+            fill
           >
             {w.label}
           </Chip>
@@ -240,51 +247,51 @@ export function Programmer() {
         {radix === 16 && (
           <Row>
             {HEX_DIGITS.map((d) => (
-              <Key key={d} label={d} variant="num" onClick={() => onInsert(d)} testId={`prog-key-${d}`} />
+              <Key key={d} label={d} variant="num" size="compact" onClick={() => onInsert(d)} testId={`prog-key-${d}`} />
             ))}
           </Row>
         )}
         <Row>
-          <Key label="<<" variant="fn" onClick={() => onInsert('<<')} testId="prog-key-shl" />
-          <Key label=">>" variant="fn" onClick={() => onInsert('>>')} testId="prog-key-shr" />
-          <Key label="%" variant="fn" onClick={() => onInsert('%')} testId="prog-key-pct" />
-          <Key label="AC" variant="danger" onClick={onAllClear} testId="prog-key-ac" />
+          <Key label="<<" variant="fn" size="compact" onClick={() => onInsert('<<')} testId="prog-key-shl" />
+          <Key label=">>" variant="fn" size="compact" onClick={() => onInsert('>>')} testId="prog-key-shr" />
+          <Key label="%" variant="fn" size="compact" onClick={() => onInsert('%')} testId="prog-key-pct" />
+          <Key label="AC" variant="danger" size="compact" onClick={onAllClear} testId="prog-key-ac" />
         </Row>
         <Row>
-          <Key label="AND" variant="fn" onClick={() => onInsert('&')} testId="prog-key-and" />
-          <Key label="OR" variant="fn" onClick={() => onInsert('|')} testId="prog-key-or" />
-          <Key label="XOR" variant="fn" onClick={() => onInsert('^')} testId="prog-key-xor" />
-          <Key label="NOT" variant="fn" onClick={() => onInsert('~')} testId="prog-key-not" />
+          <Key label="AND" variant="fn" size="compact" onClick={() => onInsert('&')} testId="prog-key-and" />
+          <Key label="OR" variant="fn" size="compact" onClick={() => onInsert('|')} testId="prog-key-or" />
+          <Key label="XOR" variant="fn" size="compact" onClick={() => onInsert('^')} testId="prog-key-xor" />
+          <Key label="NOT" variant="fn" size="compact" onClick={() => onInsert('~')} testId="prog-key-not" />
         </Row>
         <Row>
-          <Key label="(" variant="fn" onClick={() => onInsert('(')} testId="prog-key-lparen" />
-          <Key label=")" variant="fn" onClick={() => onInsert(')')} testId="prog-key-rparen" />
-          <Key label="C" variant="danger" onClick={onClear} testId="prog-key-clear" />
-          <Key label="⌫" variant="fn" onClick={onBackspace} testId="prog-key-bs" />
+          <Key label="(" variant="fn" size="compact" onClick={() => onInsert('(')} testId="prog-key-lparen" />
+          <Key label=")" variant="fn" size="compact" onClick={() => onInsert(')')} testId="prog-key-rparen" />
+          <Key label="C" variant="danger" size="compact" onClick={onClear} testId="prog-key-clear" />
+          <Key label="⌫" variant="fn" size="compact" onClick={onBackspace} testId="prog-key-bs" />
         </Row>
         <Row>
-          <Key label="7" variant="num" disabled={!allowedDigits.has('7')} onClick={() => onInsert('7')} testId="prog-key-7" />
-          <Key label="8" variant="num" disabled={!allowedDigits.has('8')} onClick={() => onInsert('8')} testId="prog-key-8" />
-          <Key label="9" variant="num" disabled={!allowedDigits.has('9')} onClick={() => onInsert('9')} testId="prog-key-9" />
-          <Key label="÷" variant="op" onClick={() => onInsert('/')} testId="prog-key-div" />
+          <Key label="7" variant="num" size="compact" mono disabled={!allowedDigits.has('7')} onClick={() => onInsert('7')} testId="prog-key-7" />
+          <Key label="8" variant="num" size="compact" mono disabled={!allowedDigits.has('8')} onClick={() => onInsert('8')} testId="prog-key-8" />
+          <Key label="9" variant="num" size="compact" mono disabled={!allowedDigits.has('9')} onClick={() => onInsert('9')} testId="prog-key-9" />
+          <Key label="÷" variant="op" size="compact" onClick={() => onInsert('/')} testId="prog-key-div" />
         </Row>
         <Row>
-          <Key label="4" variant="num" disabled={!allowedDigits.has('4')} onClick={() => onInsert('4')} testId="prog-key-4" />
-          <Key label="5" variant="num" disabled={!allowedDigits.has('5')} onClick={() => onInsert('5')} testId="prog-key-5" />
-          <Key label="6" variant="num" disabled={!allowedDigits.has('6')} onClick={() => onInsert('6')} testId="prog-key-6" />
-          <Key label="×" variant="op" onClick={() => onInsert('*')} testId="prog-key-mul" />
+          <Key label="4" variant="num" size="compact" mono disabled={!allowedDigits.has('4')} onClick={() => onInsert('4')} testId="prog-key-4" />
+          <Key label="5" variant="num" size="compact" mono disabled={!allowedDigits.has('5')} onClick={() => onInsert('5')} testId="prog-key-5" />
+          <Key label="6" variant="num" size="compact" mono disabled={!allowedDigits.has('6')} onClick={() => onInsert('6')} testId="prog-key-6" />
+          <Key label="×" variant="op" size="compact" onClick={() => onInsert('*')} testId="prog-key-mul" />
         </Row>
         <Row>
-          <Key label="1" variant="num" disabled={!allowedDigits.has('1')} onClick={() => onInsert('1')} testId="prog-key-1" />
-          <Key label="2" variant="num" disabled={!allowedDigits.has('2')} onClick={() => onInsert('2')} testId="prog-key-2" />
-          <Key label="3" variant="num" disabled={!allowedDigits.has('3')} onClick={() => onInsert('3')} testId="prog-key-3" />
-          <Key label="−" variant="op" onClick={() => onInsert('-')} testId="prog-key-sub" />
+          <Key label="1" variant="num" size="compact" mono disabled={!allowedDigits.has('1')} onClick={() => onInsert('1')} testId="prog-key-1" />
+          <Key label="2" variant="num" size="compact" mono disabled={!allowedDigits.has('2')} onClick={() => onInsert('2')} testId="prog-key-2" />
+          <Key label="3" variant="num" size="compact" mono disabled={!allowedDigits.has('3')} onClick={() => onInsert('3')} testId="prog-key-3" />
+          <Key label="−" variant="op" size="compact" onClick={() => onInsert('-')} testId="prog-key-sub" />
         </Row>
         <Row>
-          <Key label="0" variant="num" disabled={!allowedDigits.has('0')} onClick={() => onInsert('0')} testId="prog-key-0" />
-          <Key label="±" variant="fn" onClick={() => onInsert('~')} testId="prog-key-neg" />
-          <Key label="=" variant="op" onClick={onEquals} testId="prog-key-eq" />
-          <Key label="+" variant="op" onClick={() => onInsert('+')} testId="prog-key-add" />
+          <Key label="0" variant="num" size="compact" mono disabled={!allowedDigits.has('0')} onClick={() => onInsert('0')} testId="prog-key-0" />
+          <Key label="±" variant="fn" size="compact" onClick={() => onInsert('~')} testId="prog-key-neg" />
+          <Key label="=" variant="op" size="compact" onClick={onEquals} testId="prog-key-eq" />
+          <Key label="+" variant="op" size="compact" onClick={() => onInsert('+')} testId="prog-key-add" />
         </Row>
       </div>
     </div>
@@ -311,23 +318,11 @@ function Display({
     : liveValue;
 
   return (
-    <div
-      style={{
-        background: 'var(--bg-elevated)',
-        borderRadius: 'var(--radius-md)',
-        boxShadow: 'var(--shadow)',
-        padding: 'var(--s-3)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--s-1)',
-        minHeight: 0,
-      }}
-      data-testid="prog-display"
-    >
+    <Panel testId="prog-display">
       <div
         style={{
           fontSize: 12,
-          color: 'var(--fg-tertiary)',
+          color: 'var(--text-tertiary)',
           fontFamily: 'var(--font-mono)',
           textAlign: 'right',
           minHeight: '1em',
@@ -342,7 +337,7 @@ function Display({
           fontSize: 'clamp(20px, 5vw, 36px)',
           fontWeight: 300,
           letterSpacing: '-0.02em',
-          color: error ? 'var(--danger)' : 'var(--fg)',
+          color: error ? 'var(--danger)' : 'var(--text)',
           fontFamily: 'var(--font-mono)',
           textAlign: 'right',
           overflowWrap: 'anywhere',
@@ -366,7 +361,7 @@ function Display({
             borderTop: '0.5px solid var(--hairline)',
             fontFamily: 'var(--font-mono)',
             fontSize: 13,
-            color: 'var(--fg-secondary)',
+            color: 'var(--text-secondary)',
           }}
           data-testid="prog-radix-table"
         >
@@ -376,12 +371,12 @@ function Display({
               style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}
               data-radix={r.id}
             >
-              <span style={{ color: r.id === radix ? 'var(--accent)' : 'var(--fg-tertiary)', fontWeight: 600, minWidth: 32 }}>
+              <span style={{ color: r.id === radix ? 'var(--accent)' : 'var(--text-tertiary)', fontWeight: 600, minWidth: 32 }}>
                 {r.label}
               </span>
               <span
                 style={{
-                  color: r.id === radix ? 'var(--fg)' : 'var(--fg-secondary)',
+                  color: r.id === radix ? 'var(--text)' : 'var(--text-secondary)',
                   overflowWrap: 'anywhere',
                   textAlign: 'right',
                   flex: 1,
@@ -394,7 +389,7 @@ function Display({
           ))}
         </div>
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -405,116 +400,22 @@ function ChipRow({
 }: {
   label: string;
   testIdPrefix: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-2)' }}>
-      <span style={{ fontSize: 11, color: 'var(--fg-tertiary)', fontWeight: 600, letterSpacing: '0.04em', minWidth: 28 }}>
+      <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.04em', minWidth: 28 }}>
         {label}
       </span>
-      <div
-        role="radiogroup"
-        aria-label={label}
-        style={{
-          display: 'flex',
-          background: 'var(--key-fn-bg)',
-          borderRadius: 'var(--radius-md)',
-          padding: 2,
-          gap: 2,
-          flex: 1,
-          overflow: 'hidden',
-        }}
-        data-testid={`${testIdPrefix}-row`}
-      >
+      <ChipSegment role="radiogroup" ariaLabel={label} testId={`${testIdPrefix}-row`} layout="fill" shape="card">
         {children}
-      </div>
+      </ChipSegment>
     </div>
   );
 }
 
-function Chip({
-  active,
-  onClick,
-  children,
-  testId,
-}: {
-  active: boolean;
-  onClick(): void;
-  children: React.ReactNode;
-  testId: string;
-}) {
-  return (
-    <button
-      role="radio"
-      aria-checked={active}
-      type="button"
-      onClick={onClick}
-      data-testid={testId}
-      style={{
-        flex: 1,
-        padding: '6px 0',
-        borderRadius: 'var(--radius-sm)',
-        fontSize: 12,
-        fontWeight: 600,
-        background: active ? 'var(--text)' : 'transparent',
-        color: active ? 'var(--bg-elevated)' : 'var(--fg)',
-        transition: 'background-color var(--dur) var(--ease-apple), color var(--dur) var(--ease-apple)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Row({ children }: { children: React.ReactNode }) {
+function Row({ children }: { children: ReactNode }) {
   return <div style={{ display: 'flex', gap: 4 }}>{children}</div>;
-}
-
-function Key({
-  label,
-  variant,
-  onClick,
-  disabled,
-  testId,
-}: {
-  label: string;
-  variant: 'num' | 'fn' | 'op' | 'danger';
-  onClick(): void;
-  disabled?: boolean;
-  testId?: string;
-}) {
-  const style: CSSProperties = {
-    flex: 1,
-    height: 'clamp(40px, 8vw, 52px)',
-    borderRadius: 'var(--radius-md)',
-    fontSize: 'clamp(13px, 3vw, 18px)',
-    fontWeight: 600,
-    background:
-      variant === 'op' ? 'var(--operator-bg)' :
-      variant === 'fn' ? 'var(--key-fn-bg)' :
-      variant === 'danger' ? 'var(--danger-soft)' :
-      'var(--key-bg)',
-    color:
-      variant === 'op' ? 'var(--operator-fg)' :
-      variant === 'fn' ? 'var(--key-fn-fg)' :
-      variant === 'danger' ? 'var(--danger)' :
-      'var(--fg)',
-    opacity: disabled ? 0.35 : 1,
-    pointerEvents: disabled ? 'none' : 'auto',
-    fontFamily: variant === 'num' ? 'var(--font-mono)' : 'inherit',
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      data-testid={testId}
-      style={style}
-    >
-      {label}
-    </button>
-  );
 }
 
 function padByRadix(repr: RadixRepr, radix: Radix, wordSize: WordSize): string {

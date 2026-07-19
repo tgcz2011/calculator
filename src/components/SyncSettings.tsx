@@ -15,6 +15,7 @@ import {
   GENERIC_WEBDAV_PRESET,
   type WebDavPreset,
 } from '../sync';
+import { Field, Modal, Pill, Section } from './Panel';
 
 interface Props {
   open: boolean;
@@ -38,8 +39,6 @@ export function SyncSettings({ open, onClose }: Props) {
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [confirmPassphrase, setConfirmPassphrase] = useState('');
-
-  if (!open) return null;
 
   function applyPreset(provider: ProviderId) {
     const preset = PRESETS[provider];
@@ -71,155 +70,167 @@ export function SyncSettings({ open, onClose }: Props) {
     (sync.config.provider === 'icloud' || !!sync.config.endpoint);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="同步设置"
-      style={backdropStyle}
-      onClick={onClose}
-    >
-      <div
-        style={panelStyle}
-        onClick={(e) => e.stopPropagation()}
-        data-testid="sync-settings"
-      >
-        <div style={headerStyle}>
-          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>同步</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="关闭"
-            style={closeBtnStyle}
-          >
-            {'\u2715'}
-          </button>
-        </div>
+    <Modal open={open} onClose={onClose} ariaLabel="同步设置" testId="sync-settings">
+      <div style={headerStyle}>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>同步</h2>
+        <Pill onClick={onClose} ariaLabel="关闭">
+          {'\u2715'}
+        </Pill>
+      </div>
 
-        <div style={bodyStyle}>
-          {/* Status banner */}
-          <StatusBanner status={sync.status} onSyncNow={sync.syncNow} connected={!!sync.connected} />
+      <div style={bodyStyle}>
+        {/* Status banner */}
+        <StatusBanner status={sync.status} onSyncNow={sync.syncNow} connected={!!sync.connected} />
 
-          {/* Provider selection */}
-          <Section title="服务">
-            <div role="radiogroup" aria-label="Provider" style={radioGroupStyle}>
-              {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
-                <label key={id} style={radioLabelStyle}>
-                  <input
-                    type="radio"
-                    name="provider"
-                    value={id}
-                    checked={sync.config.provider === id}
-                    onChange={() => applyPreset(id)}
-                    disabled={!!sync.connected}
-                  />
-                  <span>{PROVIDER_LABELS[id]}</span>
-                </label>
-              ))}
-            </div>
-            {preset && (
-              <p style={hintStyle}>
-                {preset.usernameHint}
-                <br />
-                <span style={{ color: 'var(--accent)' }}>{preset.passwordHint}</span>
-              </p>
-            )}
-            {sync.config.provider === 'icloud' && (
-              <p style={hintStyle}>
-                iCloud 同步等待原生 bridge 落地（P2）。其他平台请用 WebDAV / 坚果云。
-              </p>
-            )}
-          </Section>
-
-          {/* WebDAV config */}
-          {sync.config.provider !== 'icloud' && (
-            <Section title="服务器">
-              <Field
-                label="Endpoint"
-                placeholder="https://dav.jianguoyun.com/dav/"
-                value={sync.config.endpoint}
-                onChange={(v) => sync.setConfig({ endpoint: v })}
-                disabled={!!sync.connected}
-                testId="sync-endpoint"
-              />
-              <Field
-                label="用户名"
-                value={sync.config.username}
-                onChange={(v) => sync.setConfig({ username: v })}
-                disabled={!!sync.connected}
-                testId="sync-username"
-              />
-              <Field
-                label="密码 / 应用密码"
-                type="password"
-                placeholder={preset?.passwordHint ?? ''}
-                value={password}
-                onChange={setPassword}
-                disabled={!!sync.connected}
-                testId="sync-password"
-              />
-              <Field
-                label="路径"
-                value={sync.config.path}
-                onChange={(v) => sync.setConfig({ path: v })}
-                disabled={!!sync.connected}
-                testId="sync-path"
-              />
-            </Section>
+        {/* Provider selection */}
+        <Section title="服务">
+          <div role="radiogroup" aria-label="Provider" style={radioGroupStyle}>
+            {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
+              <label key={id} style={radioLabelStyle}>
+                <input
+                  type="radio"
+                  name="provider"
+                  value={id}
+                  checked={sync.config.provider === id}
+                  onChange={() => applyPreset(id)}
+                  disabled={!!sync.connected}
+                />
+                <span>{PROVIDER_LABELS[id]}</span>
+              </label>
+            ))}
+          </div>
+          {preset && (
+            <p style={hintStyle}>
+              {preset.usernameHint}
+              <br />
+              <span style={{ color: 'var(--accent)' }}>{preset.passwordHint}</span>
+            </p>
           )}
+          {sync.config.provider === 'icloud' && (
+            <p style={hintStyle}>
+              iCloud 同步等待原生 bridge 落地（P2）。其他平台请用 WebDAV / 坚果云。
+            </p>
+          )}
+        </Section>
 
-          {/* Passphrase */}
-          {sync.config.provider !== 'icloud' && (
-            <Section title="端到端加密">
-              <Field
-                label="Passphrase（≥ 8 位）"
+        {/* WebDAV config */}
+        {sync.config.provider !== 'icloud' && (
+          <Section title="服务器">
+            <Field
+              label="Endpoint"
+              hint={undefined}
+            >
+              <input
+                type="text"
+                value={sync.config.endpoint}
+                onChange={(e) => sync.setConfig({ endpoint: e.target.value })}
+                placeholder="https://dav.jianguoyun.com/dav/"
+                disabled={!!sync.connected}
+                autoComplete="off"
+                className="ui-field-input"
+                data-testid="sync-endpoint"
+              />
+            </Field>
+            <Field label="用户名">
+              <input
+                type="text"
+                value={sync.config.username}
+                onChange={(e) => sync.setConfig({ username: e.target.value })}
+                disabled={!!sync.connected}
+                autoComplete="off"
+                className="ui-field-input"
+                data-testid="sync-username"
+              />
+            </Field>
+            <Field
+              label="密码 / 应用密码"
+            >
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={!!sync.connected}
+                autoComplete="off"
+                className="ui-field-input"
+                data-testid="sync-password"
+              />
+            </Field>
+            <Field label="路径">
+              <input
+                type="text"
+                value={sync.config.path}
+                onChange={(e) => sync.setConfig({ path: e.target.value })}
+                disabled={!!sync.connected}
+                autoComplete="off"
+                className="ui-field-input"
+                data-testid="sync-path"
+              />
+            </Field>
+          </Section>
+        )}
+
+        {/* Passphrase */}
+        {sync.config.provider !== 'icloud' && (
+          <Section title="端到端加密">
+            <Field
+              label="Passphrase（≥ 8 位）"
+              hint="用于加密历史 blob；只在本会话内存，不写入磁盘。换设备或换 passphrase 都能解密，但丢 passphrase 数据就回不来。"
+            >
+              <input
                 type="password"
                 value={passphrase}
-                onChange={setPassphrase}
+                onChange={(e) => setPassphrase(e.target.value)}
                 disabled={!!sync.connected}
-                testId="sync-passphrase"
-                hint="用于加密历史 blob；只在本会话内存，不写入磁盘。换设备或换 passphrase 都能解密，但丢 passphrase 数据就回不来。"
+                autoComplete="off"
+                className="ui-field-input"
+                data-testid="sync-passphrase"
               />
-              <Field
-                label="确认 passphrase"
+            </Field>
+            <Field
+              label="确认 passphrase"
+              error={confirmPassphrase && passphrase !== confirmPassphrase ? '两次输入不一致' : undefined}
+            >
+              <input
                 type="password"
                 value={confirmPassphrase}
-                onChange={setConfirmPassphrase}
+                onChange={(e) => setConfirmPassphrase(e.target.value)}
                 disabled={!!sync.connected}
-                testId="sync-passphrase-confirm"
-                error={confirmPassphrase && passphrase !== confirmPassphrase ? '两次输入不一致' : undefined}
+                autoComplete="off"
+                className="ui-field-input"
+                data-testid="sync-passphrase-confirm"
               />
-            </Section>
-          )}
+            </Field>
+          </Section>
+        )}
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 'var(--s-3)', marginTop: 'var(--s-4)' }}>
-            {!sync.connected ? (
-              <button
-                type="button"
-                onClick={onConnect}
-                disabled={!canSubmit}
-                style={{
-                  ...primaryBtnStyle,
-                  opacity: canSubmit ? 1 : 0.5,
-                }}
-                data-testid="sync-connect"
-              >
-                连接
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={sync.disconnect}
-                style={dangerBtnStyle}
-                data-testid="sync-disconnect"
-              >
-                断开连接
-              </button>
-            )}
-          </div>
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 'var(--s-3)', marginTop: 'var(--s-4)' }}>
+          {!sync.connected ? (
+            <button
+              type="button"
+              onClick={onConnect}
+              disabled={!canSubmit}
+              style={{
+                ...primaryBtnStyle,
+                opacity: canSubmit ? 1 : 0.5,
+              }}
+              data-testid="sync-connect"
+            >
+              连接
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={sync.disconnect}
+              style={dangerBtnStyle}
+              data-testid="sync-disconnect"
+            >
+              断开连接
+            </button>
+          )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -233,7 +244,7 @@ function StatusBanner({
   connected: boolean;
 }) {
   const palette: Record<string, { bg: string; fg: string; label: string }> = {
-    idle: { bg: 'var(--bg-elevated)', fg: 'var(--fg-secondary)', label: '未连接' },
+    idle: { bg: 'var(--bg-elevated)', fg: 'var(--text-secondary)', label: '未连接' },
     connecting: { bg: 'var(--accent-soft)', fg: 'var(--accent)', label: '正在连接...' },
     connected: { bg: 'var(--accent-soft)', fg: 'var(--accent)', label: '已同步' },
     error: { bg: 'var(--danger-soft)', fg: 'var(--danger)', label: '出错' },
@@ -278,93 +289,12 @@ function StatusBanner({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={{ marginBottom: 'var(--s-5)' }}>
-      <h3 style={sectionTitleStyle}>{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function Field({
-  label,
-  type = 'text',
-  value,
-  onChange,
-  placeholder,
-  disabled,
-  hint,
-  error,
-  testId,
-}: {
-  label: string;
-  type?: 'text' | 'password';
-  value: string;
-  onChange(v: string): void;
-  placeholder?: string;
-  disabled?: boolean;
-  hint?: string;
-  error?: string;
-  testId?: string;
-}) {
-  return (
-    <label style={{ display: 'block', marginBottom: 'var(--s-3)' }}>
-      <span style={labelStyle}>{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        autoComplete="off"
-        autoCorrect="off"
-        spellCheck={false}
-        data-testid={testId}
-        style={{
-          ...inputStyle,
-          opacity: disabled ? 0.5 : 1,
-        }}
-      />
-      {(hint || error) && (
-        <span style={{ ...hintStyle, color: error ? 'var(--danger)' : 'var(--fg-tertiary)' }}>
-          {error ?? hint}
-        </span>
-      )}
-    </label>
-  );
-}
-
 function formatTime(ts: number): string {
   if (!ts) return '';
   const d = new Date(ts);
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-
-// ponytail: styles inline for now. If settings grows, extract to settings.css.
-const backdropStyle: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0, 0, 0, 0.4)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-  padding: 'var(--s-4)',
-};
-
-const panelStyle: CSSProperties = {
-  background: 'var(--bg-elevated)',
-  borderRadius: 'var(--radius-lg)',
-  boxShadow: 'var(--shadow-elevated)',
-  width: '100%',
-  maxWidth: 480,
-  maxHeight: '90vh',
-  overflow: 'hidden',
-  display: 'flex',
-  flexDirection: 'column',
-};
 
 const headerStyle: CSSProperties = {
   display: 'flex',
@@ -378,25 +308,6 @@ const bodyStyle: CSSProperties = {
   padding: 'var(--s-4) var(--s-5)',
   overflowY: 'auto',
   flex: 1,
-};
-
-const closeBtnStyle: CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 'var(--radius-full)',
-  background: 'var(--key-fn-bg)',
-  color: 'var(--key-fn-fg)',
-  fontSize: 14,
-  fontWeight: 600,
-};
-
-const sectionTitleStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: 'var(--fg-tertiary)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  margin: '0 0 var(--s-3) 0',
 };
 
 const radioGroupStyle: CSSProperties = {
@@ -417,30 +328,11 @@ const radioLabelStyle: CSSProperties = {
   fontSize: 14,
 };
 
-const labelStyle: CSSProperties = {
-  display: 'block',
-  fontSize: 13,
-  fontWeight: 500,
-  color: 'var(--fg-secondary)',
-  marginBottom: 'var(--s-1)',
-};
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  padding: 'var(--s-3)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg)',
-  border: '1px solid var(--hairline)',
-  color: 'var(--fg)',
-  fontSize: 15,
-  fontFamily: 'inherit',
-};
-
 const hintStyle: CSSProperties = {
   display: 'block',
   marginTop: 'var(--s-1)',
   fontSize: 12,
-  color: 'var(--fg-tertiary)',
+  color: 'var(--text-tertiary)',
   lineHeight: 1.4,
 };
 
@@ -449,7 +341,7 @@ const primaryBtnStyle: CSSProperties = {
   padding: 'var(--s-3) var(--s-4)',
   borderRadius: 'var(--radius-md)',
   background: 'var(--accent)',
-  color: '#fff',
+  color: 'var(--text-on-accent)',
   fontSize: 16,
   fontWeight: 600,
 };

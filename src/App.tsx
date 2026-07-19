@@ -7,6 +7,7 @@ import { SyncSettings } from './components/SyncSettings';
 import { DateTime } from './components/DateTime';
 import { Units } from './components/Units';
 import { Programmer } from './components/Programmer';
+import { Pill } from './components/Panel';
 import { useCalculator } from './state/useCalculator';
 import { useKeyboard } from './native/keyboard';
 import { useKeyboardExtras } from './hooks/useKeyboardExtras';
@@ -126,9 +127,11 @@ export default function App() {
           alignItems: 'stretch',
           justifyContent: 'space-between',
           gap: 'var(--s-2)',
+          position: 'relative',
+          zIndex: 'var(--z-tabbar)',
         }}
       >
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
           <TabBar
             mode={calc.state.mode}
             angle={calc.state.angle}
@@ -137,48 +140,21 @@ export default function App() {
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--s-2)', padding: 'var(--s-3) var(--s-4) var(--s-3) 0' }}>
-          <button
-            type="button"
+          <Pill
             onClick={toggleTheme}
-            aria-label={`切换到${theme === 'light' ? '深色' : '浅色'}主题`}
-            title={`当前：${theme === 'light' ? '浅色' : '深色'}`}
-            data-testid="toggle-theme"
-            data-theme-toggle={theme}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 'var(--radius-full)',
-              background: 'var(--key-fn-bg)',
-              color: 'var(--key-fn-fg)',
-              fontSize: 16,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            ariaLabel={`切换到${theme === 'light' ? '深色' : '浅色'}主题`}
+            testId="toggle-theme"
           >
             <span aria-hidden>{theme === 'light' ? '\u263D' : '\u2600'}</span>
-          </button>
-          <button
-            type="button"
+          </Pill>
+          <Pill
             onClick={() => setSyncOpen(true)}
-            aria-label="同步设置"
-            data-testid="open-sync-settings"
-            style={{
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-full)',
-              background: 'var(--key-fn-bg)',
-              color: 'var(--key-fn-fg)',
-              fontSize: 13,
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              height: 32,
-            }}
+            ariaLabel="同步设置"
+            testId="open-sync-settings"
           >
             <span aria-hidden style={{ fontSize: 16 }}>{'\u2699'}</span>
             <span>同步</span>
-          </button>
+          </Pill>
         </div>
       </div>
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
