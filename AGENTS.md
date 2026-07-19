@@ -40,3 +40,39 @@ Verifies Rust + plugin-sql registration compiles. Icons only needed for `tauri b
 ## CocoaPods (iOS)
 
 If `pod` not installed: `sudo gem install cocoapods`. Required before `npx cap add ios`.
+
+## Release process (project rule, 2026-07-18)
+
+After every feature is fully done (merged to main + tested), publish a GitHub release so the project owner can download and review. Versioning is strict SemVer in `package.json`; tags MUST be unique — the release script refuses to run if the tag already exists (local or origin).
+
+**One-shot**
+
+```bash
+./scripts/release.sh
+```
+
+What it does:
+1. Reads `version` from `package.json` (e.g. `0.2.0`)
+2. Refuses to run unless we're on `main`, working tree is clean, and HEAD == `origin/main`
+3. Refuses to run if `v<version>` already exists locally or on `origin` (no-repeat guarantee)
+4. Runs `npm run build` (typecheck + vite → `dist/`)
+5. Zips `dist/` → `calculator-v<version>.zip`
+6. `git tag -a v<version>` + `git push origin v<version>`
+7. `gh release create v<version> calculator-v<version>.zip` with default notes
+
+**How to bump**
+
+1. Branch off main, edit `package.json` `version` (only that field), commit, open PR, squash-merge to main
+2. After merge, on main: `./scripts/release.sh`
+3. Verify green: `gh workflow run feature-complete.yml` (per the always-run rule)
+
+**Versioning cheat sheet**
+
+- `0.1.0 -> 0.2.0` — new feature closed (P1 milestone)
+- `0.2.0 -> 0.2.1` — engine contract patches, smoke fixes, e2e cleanup (no user-visible behavior change)
+- `0.2.x -> 0.3.0` — next feature batch closed
+- `0.x.y -> 1.0.0` — first "production-ready" cut (engine contracts declared stable)
+
+`engine`, `history`, and `sync` are public contracts — touching their signatures is a minor bump at minimum.
+
+When in doubt: read the last tag, add a feature/fix, bump the right SemVer digit.
