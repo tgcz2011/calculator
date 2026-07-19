@@ -83,7 +83,11 @@ function reducer(s: UiState, a: Action): UiState {
     case 'backspace': return { ...s, expr: s.expr.slice(0, -1) };
     case 'clear': return { ...s, expr: '' };
     case 'allclear': return { ...s, expr: '', lastResult: null };
-    case 'commit': return { ...s, expr: a.repr.dec, lastResult: a.repr };
+    // ponytail: keep expr as the user's input after `=`. Re-evaluating with
+    // current radix gives the right primary (e.g. "FF+1" -> 0x100 padded).
+    // Setting expr to dec was a footgun: in HEX the new expr "256" was
+    // re-parsed as hex 0x256 = 598, making the display lie about the answer.
+    case 'commit': return { ...s, expr: s.expr, lastResult: a.repr };
     case 'replace': return { ...s, expr: a.expr };
   }
 }
@@ -153,10 +157,16 @@ export function Programmer() {
     } else if (state.expr) {
       const token = lastNumberToken(state.expr);
       if (token) {
-        const r = engine.toRadix(token, wordSize);
-        const mapped = padByRadix(r, next, wordSize);
-        const newExpr = state.expr.slice(0, state.expr.length - token.length) + mapped;
-        dispatch({ kind: 'replace', expr: newExpr });
+        // ponytail: toRadix() takes a DECIMAL string. The token was typed in the
+        // current radix, so convert it to dec first (e.g. "10" in HEX -> 16).
+        // Without this, "10" HEX would become 0xA when reformatted to DEC.
+        const dec = parseInt(token, radix);
+        if (Number.isFinite(dec)) {
+          const r = engine.toRadix(dec.toString(), wordSize);
+          const mapped = padByRadix(r, next, wordSize);
+          const newExpr = state.expr.slice(0, state.expr.length - token.length) + mapped;
+          dispatch({ kind: 'replace', expr: newExpr });
+        }
       }
     }
   }
@@ -495,7 +505,13 @@ function Key({
     fontFamily: variant === 'num' ? 'var(--font-mono)' : 'inherit',
   };
   return (
-    <button type="button" onClick={onClick} data-testid={testId} style={style}>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      data-testid={testId}
+      style={style}
+    >
       {label}
     </button>
   );
