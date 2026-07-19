@@ -1,0 +1,97 @@
+name: native-debug
+
+# Debug builds for iOS (simulator .app) and Android (debug APK) via Capacitor.
+# Replaces the "pending human env (Xcode/Android Studio)" blocker - the owner
+# downloads artifacts from the run, no local toolchain needed to BUILD.
+# iOS device sideloading needs signing certs (ad-hoc/dev) - not in this workflow;
+# ask owner for secrets when ready. Simulator .app runs in Xcode Simulator (free).
+#
+# ponytail: native projects (ios/, android/) are generated fresh each run via
+# `cap add` - never committed (AGENTS.md: "generated on a machine with SDK").
+# Two jobs, independent runners: Android on Linux (cheap), iOS on macOS (needs Xcode).
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to build"
+        type: choice
+        options: [both, ios, android]
+        default: both
+
+concurrency:
+  group: native-debug-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    if: inputs.platforms != 'ios'
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: npm ci
+      - run: npm run build
+      - name: Add Capacitor Android platform
+        run: npx cap add android
+      - name: Sync web build into native project
+        run: npx cap sync android
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: iOS debug (simulator)
+    runs-on: macos-latest
+    if: inputs.platforms != 'android'
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Add Capacitor iOS platform
+        run: npx cap add ios
+      - name: Sync web build + install pods
+        run: npx cap sync ios
+      - name: Build for iOS Simulator (no signing needed)
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ios/build \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+      - name: Zip simulator .app
+        run: |
+          cd ios/build/Build/Products/Debug-iphonesimulator
+          zip -ry App.app.zip App.app
+      - name: Upload simulator .app
+        uses: actions/upload-artifact@v4
+        with:
+          name: calculator-ios-simulator
+          path: ios/build/Build/Products/Debug-iphonesimulator/App.app.zip
+          if-no-files-found: error
+          retention-days: 30
