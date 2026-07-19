@@ -14,6 +14,8 @@ import {
   type CategoryDef,
   type UnitDef,
 } from '../units/engine';
+import { Chip, ChipSegment } from './Chip';
+import { Panel, PanelLabel, Pill } from './Panel';
 
 type CatId = CategoryDef['id'];
 
@@ -60,13 +62,13 @@ export function Units() {
       }}
       data-testid="units-mode"
     >
-      <div role="tablist" aria-label="Unit category" style={subTabsStyle}>
+      <ChipSegment role="tablist" ariaLabel="Unit category" layout="fill" shape="card">
         {CATEGORIES.map((c) => (
-          <SubTab key={c.id} active={categoryId === c.id} onClick={() => switchCategory(c.id)}>
+          <Chip key={c.id} active={categoryId === c.id} onClick={() => switchCategory(c.id)} fill>
             {c.label}
-          </SubTab>
+          </Chip>
         ))}
-      </div>
+      </ChipSegment>
 
       {category.id === 'currency' && (
         <div style={stampStyle} data-testid="currency-snapshot">
@@ -91,15 +93,14 @@ export function Units() {
             testId="units-from"
           />
         </div>
-        <button
-          type="button"
+        <Pill
+          size="md"
           onClick={swap}
-          aria-label="互换单位"
-          data-testid="units-swap"
-          style={swapBtnStyle}
+          ariaLabel="互换单位"
+          testId="units-swap"
         >
           {'\u21C4'}
-        </button>
+        </Pill>
         <div style={{ flex: 1 }}>
           <UnitPicker
             label="到"
@@ -133,15 +134,15 @@ function AmountField({
   testId: string;
 }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-1)' }}>
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-secondary)' }}>{label}</span>
+    <label className="ui-field">
+      <span className="ui-field-label">{label}</span>
       <input
         type="number"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         step="any"
         data-testid={testId}
-        style={inputStyle}
+        className="ui-field-input"
       />
     </label>
   );
@@ -161,13 +162,14 @@ function UnitPicker({
   testId: string;
 }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-1)' }}>
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-secondary)' }}>{label}</span>
+    <label className="ui-field">
+      <span className="ui-field-label">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         data-testid={testId}
-        style={{ ...inputStyle, appearance: 'none', paddingRight: 'var(--s-6)' }}
+        className="ui-field-input"
+        style={{ appearance: 'none', paddingRight: 'var(--s-6)' }}
       >
         {units.map((u) => (
           <option key={u.symbol} value={u.symbol}>
@@ -192,82 +194,24 @@ function ResultCard({
 }) {
   if (error) {
     return (
-      <div
-        data-testid="units-result"
-        data-error-code={errorCode}
-        style={{
-          padding: 'var(--s-4)',
-          borderRadius: 'var(--radius-md)',
-          background: 'var(--danger-soft)',
-          color: 'var(--danger)',
-          fontSize: 16,
-          fontWeight: 500,
-        }}
-      >
+      <Panel testId="units-result" variant="danger">
         <span className="error-glyph" data-error-code={errorCode} aria-hidden style={glyphInlineStyle} />
         {error}
-      </div>
+      </Panel>
     );
   }
   return (
-    <div
-      data-testid="units-result"
-      style={{
-        padding: 'var(--s-4)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--bg-elevated)',
-        boxShadow: 'var(--shadow)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--s-1)',
-      }}
-    >
-      <span style={{ fontSize: 13, color: 'var(--fg-tertiary)', fontWeight: 500 }}>结果</span>
+    <Panel testId="units-result">
+      <PanelLabel>结果</PanelLabel>
       <span
         data-testid="units-result-value"
-        style={{
-          fontSize: 32,
-          fontWeight: 300,
-          letterSpacing: '-0.02em',
-          color: 'var(--fg)',
-          fontVariantNumeric: 'tabular-nums',
-        }}
+        className="ui-result-primary"
+        style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--s-2)' }}
       >
-        {value || '\u00a0'} <span style={{ fontSize: 18, color: 'var(--fg-tertiary)' }}>{symbol}</span>
+        {value || '\u00a0'}
+        <span style={{ fontSize: 18, color: 'var(--text-tertiary)' }}>{symbol}</span>
       </span>
-    </div>
-  );
-}
-
-function SubTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick(): void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      role="tab"
-      aria-selected={active}
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: '8px 0',
-        borderRadius: 'var(--radius-md)',
-        fontSize: 13,
-        fontWeight: 600,
-        background: active ? 'var(--text)' : 'transparent',
-        color: active ? 'var(--bg-elevated)' : 'var(--fg)',
-        transition: 'background-color var(--dur) var(--ease-apple), color var(--dur) var(--ease-apple)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {children}
-    </button>
+    </Panel>
   );
 }
 
@@ -278,43 +222,11 @@ function formatStamp(iso: string): string {
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
-const subTabsStyle: CSSProperties = {
-  display: 'flex',
-  background: 'var(--key-fn-bg)',
-  borderRadius: 'var(--radius-md)',
-  padding: 4,
-  gap: 2,
-  overflowX: 'auto',
-};
-
 const stampStyle: CSSProperties = {
   fontSize: 12,
-  color: 'var(--fg-tertiary)',
+  color: 'var(--text-tertiary)',
   textAlign: 'center',
   padding: 'var(--s-1) var(--s-2)',
-};
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  padding: 'var(--s-3)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-elevated)',
-  border: '1px solid var(--hairline)',
-  color: 'var(--fg)',
-  fontSize: 16,
-  fontFamily: 'inherit',
-};
-
-const swapBtnStyle: CSSProperties = {
-  width: 36,
-  height: 36,
-  alignSelf: 'flex-end',
-  marginBottom: 2,
-  borderRadius: 'var(--radius-full)',
-  background: 'var(--key-fn-bg)',
-  color: 'var(--key-fn-fg)',
-  fontSize: 16,
-  fontWeight: 600,
 };
 
 const glyphInlineStyle: CSSProperties = {
@@ -324,7 +236,7 @@ const glyphInlineStyle: CSSProperties = {
   width: '1.6em',
   height: '1.6em',
   marginRight: '0.4em',
-  borderRadius: '9999px',
+  borderRadius: 'var(--radius-full)',
   background: 'var(--danger)',
   color: '#fff',
   fontSize: '0.8em',

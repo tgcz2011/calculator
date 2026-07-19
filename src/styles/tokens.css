@@ -1,18 +1,29 @@
-/* Apple-style design tokens. Owner: Minimax-M3.
+/* Apple HIG design system - the single source of truth for all visual tokens.
+   Owner: Minimax-M3. Two themes (light / dark) via [data-theme] on <html>; the
+   system preference falls back to prefers-color-scheme. Only color / surface
+   tokens change between themes - geometry, type, motion, elevation stay fixed.
+
+   Framework rules:
+   1. Every color / surface in components MUST come from a token below. No
+      hex literals outside this file except inside a theme block.
+   2. Spacing / radius / type / motion / elevation are theme-invariant - they
+      live in the :root block and stay there.
+   3. New feature? Add a token here first, reference it. Don't inline-style it.
+   4. Override any existing alias to a token via additional values at the use
+      site - new components should use the canonical names directly.
+
    Locked constraints (from Leader):
-   - SF Pro font stack
-   - System color tokens, Light/Dark via prefers-color-scheme
+   - SF Pro font stack with fallbacks
+   - System color tokens, light + dark via prefers-color-scheme
    - 12-18px radii
    - Subtle elevation shadows
    - cubic-bezier(0.25, 0.1, 0.25, 1) transitions
    - Liquid Glass: subtle backdrop-filter blur
-   - prefers-reduced-motion: zero motion
+   - prefers-reduced-motion: zero motion */
 
-   Variable naming kept compatible with General's baseline (--bg, --accent, ...)
-   so the General App.tsx placeholder still resolves if needed. */
-
+/* === Theme-invariant tokens === */
 :root {
-  /* Type — SF Pro system stack with sensible fallbacks */
+  /* Type - SF Pro system stack with sensible fallbacks */
   --font-system: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
     'Helvetica Neue', 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -26,130 +37,165 @@
   --s-6: 24px;
   --s-8: 32px;
   --s-10: 40px;
+  --s-12: 48px;
 
-  /* Radius — spec says 12-18px */
+  /* Radius - spec says 12-18px for controls; full for pills */
   --radius-sm: 12px;
   --radius-md: 14px;
   --radius-lg: 18px;
   --radius-full: 9999px;
 
-  /* Motion */
-  --ease-apple: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Motion - one standard easing, one emphasized for pop. Apple-style curves. */
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 120ms;
   --dur: 180ms;
   --dur-slow: 360ms;
 
-  /* Display sizing — scales fluidly with width */
+  /* Display sizing - fluid with viewport width */
   --display-fs: clamp(48px, 9vw, 96px);
   --display-fs-expr: clamp(20px, 4vw, 30px);
-  --key-size: clamp(56px, 13vw, 76px);
 
-  /* Light theme (Apple HIG base) */
+  /* Keypad sizing - 56-76px tall, 4-col layout on phone, comfortable on tablet.
+     Padding defines the visible gutter between keys; combined with border-radius
+     gives the Apple Calculator airy look without losing button reach. */
+  --key-size: clamp(56px, 13vw, 76px);
+  --key-fs: clamp(20px, 4.6vw, 30px);
+  --key-pad: var(--s-2);
+
+  /* Z-stack */
+  --z-keypad: 1;
+  --z-display: 2;
+  --z-tabbar: 3;
+  --z-modal: 100;
+}
+
+/* === Light theme (Apple HIG base) === */
+:root,
+:root[data-theme='light'] {
+  /* Surface */
   --bg: #f2f2f7;
   --bg-elevated: #ffffff;
   --bg-display: #1c1c1e;
   --bg-glass: rgba(255, 255, 255, 0.72);
+
+  /* Borders */
   --hairline: rgba(60, 60, 67, 0.18);
-  --fg: #000000;
-  --fg-secondary: #3c3c43;
-  --fg-tertiary: #8e8e93;
-  --fg-display: #ffffff;
-  --fg-display-secondary: rgba(235, 235, 245, 0.6);
+  --border: rgba(60, 60, 67, 0.24);
+
+  /* Text */
+  --text: #000000;
+  --text-secondary: #3c3c43;
+  --text-tertiary: #8e8e93;
+  --text-on-accent: #ffffff;
+  --text-on-operator: #ffffff;
+  --text-display: #ffffff;
+  --text-display-secondary: rgba(235, 235, 245, 0.6);
+
+  /* Brand */
   --accent: #007aff;
   --accent-soft: rgba(0, 122, 255, 0.12);
   --danger: #ff3b30;
   --danger-soft: rgba(255, 59, 48, 0.14);
-  --operator-bg: #ff9f0a;
-  --operator-fg: #ffffff;
-  --key-bg: rgba(255, 255, 255, 0.9);
-  --key-fg: #000000;
+
+  /* Keys - calculator button palette (light) */
+  --key-num-bg: rgba(255, 255, 255, 0.9);
+  --key-num-fg: #000000;
   --key-fn-bg: rgba(118, 118, 128, 0.24);
   --key-fn-fg: #000000;
+  --key-op-bg: #ff9f0a;
+  --key-op-fg: #ffffff;
+  --key-danger-bg: rgba(255, 59, 48, 0.12);
+  --key-danger-fg: #ff3b30;
+
+  /* Elevation */
+  --shadow-key: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
   --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
+/* === Dark theme (Apple HIG dark) === */
+:root[data-theme='dark'] {
+  /* Surface */
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --bg-display: #000000;
+  --bg-glass: rgba(28, 28, 30, 0.72);
+
+  /* Borders */
+  --hairline: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.2);
+
+  /* Text */
+  --text: #ffffff;
+  --text-secondary: #ebebf5;
+  --text-tertiary: #8e8e93;
+  --text-on-accent: #ffffff;
+  --text-on-operator: #1c1c1e;
+  --text-display: #ffffff;
+  --text-display-secondary: rgba(235, 235, 245, 0.6);
+
+  /* Brand */
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.18);
+  --danger: #ff453a;
+  --danger-soft: rgba(255, 69, 58, 0.18);
+
+  /* Keys - calculator button palette (dark).
+     Orange operator stays #ff9f0a but flips to dark text for AA contrast.
+     fn keys light up against the dark bg; num keys are dark surface with white text. */
+  --key-num-bg: rgba(44, 44, 46, 0.9);
+  --key-num-fg: #ffffff;
+  --key-fn-bg: rgba(118, 118, 128, 0.32);
+  --key-fn-fg: #ffffff;
+  --key-op-bg: #ff9f0a;
+  --key-op-fg: #1c1c1e;
+  --key-danger-bg: rgba(255, 69, 58, 0.18);
+  --key-danger-fg: #ff453a;
+
+  /* Elevation */
+  --shadow-key: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* === System-pref fallback (only when no explicit data-theme attr) ===
+   Specificity: :root[data-theme=X] (0,2,0) beats @media inside :root (0,1,0),
+   so explicit user pref always wins. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #000000;
     --bg-elevated: #1c1c1e;
     --bg-display: #000000;
     --bg-glass: rgba(28, 28, 30, 0.72);
     --hairline: rgba(255, 255, 255, 0.16);
-    --fg: #ffffff;
-    --fg-secondary: #ebebf5;
-    --fg-tertiary: #8e8e93;
-    --fg-display: #ffffff;
-    --fg-display-secondary: rgba(235, 235, 245, 0.6);
+    --border: rgba(255, 255, 255, 0.2);
+    --text: #ffffff;
+    --text-secondary: #ebebf5;
+    --text-tertiary: #8e8e93;
+    --text-on-accent: #ffffff;
+    --text-on-operator: #1c1c1e;
+    --text-display: #ffffff;
+    --text-display-secondary: rgba(235, 235, 245, 0.6);
     --accent: #0a84ff;
     --accent-soft: rgba(10, 132, 255, 0.18);
     --danger: #ff453a;
     --danger-soft: rgba(255, 69, 58, 0.18);
-    --operator-bg: #ff9f0a;
-    --operator-fg: #1c1c1e;
-    --key-bg: rgba(44, 44, 46, 0.9);
-    --key-fg: #ffffff;
+    --key-num-bg: rgba(44, 44, 46, 0.9);
+    --key-num-fg: #ffffff;
     --key-fn-bg: rgba(118, 118, 128, 0.32);
     --key-fn-fg: #ffffff;
+    --key-op-bg: #ff9f0a;
+    --key-op-fg: #1c1c1e;
+    --key-danger-bg: rgba(255, 69, 58, 0.18);
+    --key-danger-fg: #ff453a;
+    --shadow-key: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
     --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
   }
 }
 
-/* Manual theme override (set by useTheme hook + index.html inline script).
-   Specificity 0,2,0 (root + attr) beats the media query (0,1,0 inside media),
-   so explicit [data-theme] always wins over prefers-color-scheme. */
-:root[data-theme='light'] {
-  --bg: #f2f2f7;
-  --bg-elevated: #ffffff;
-  --bg-display: #1c1c1e;
-  --bg-glass: rgba(255, 255, 255, 0.72);
-  --hairline: rgba(60, 60, 67, 0.18);
-  --fg: #000000;
-  --fg-secondary: #3c3c43;
-  --fg-tertiary: #8e8e93;
-  --fg-display: #ffffff;
-  --fg-display-secondary: rgba(235, 235, 245, 0.6);
-  --accent: #007aff;
-  --accent-soft: rgba(0, 122, 255, 0.12);
-  --danger: #ff3b30;
-  --danger-soft: rgba(255, 59, 48, 0.14);
-  --operator-bg: #ff9f0a;
-  --operator-fg: #ffffff;
-  --key-bg: rgba(255, 255, 255, 0.9);
-  --key-fg: #000000;
-  --key-fn-bg: rgba(118, 118, 128, 0.24);
-  --key-fn-fg: #000000;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-}
-
-:root[data-theme='dark'] {
-  --bg: #000000;
-  --bg-elevated: #1c1c1e;
-  --bg-display: #000000;
-  --bg-glass: rgba(28, 28, 30, 0.72);
-  --hairline: rgba(255, 255, 255, 0.16);
-  --fg: #ffffff;
-  --fg-secondary: #ebebf5;
-  --fg-tertiary: #8e8e93;
-  --fg-display: #ffffff;
-  --fg-display-secondary: rgba(235, 235, 245, 0.6);
-  --accent: #0a84ff;
-  --accent-soft: rgba(10, 132, 255, 0.18);
-  --danger: #ff453a;
-  --danger-soft: rgba(255, 69, 58, 0.18);
-  --operator-bg: #ff9f0a;
-  --operator-fg: #1c1c1e;
-  --key-bg: rgba(44, 44, 46, 0.9);
-  --key-fg: #ffffff;
-  --key-fn-bg: rgba(118, 118, 128, 0.32);
-  --key-fn-fg: #ffffff;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-
+/* === Reduced motion: zero motion across the app === */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0.01ms;
@@ -158,7 +204,10 @@
   }
 }
 
-* {
+/* === Base resets + typography === */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -169,19 +218,22 @@ body,
   padding: 0;
   height: 100%;
   width: 100%;
-  font-family: var(--font-system);
-  background: var(--bg);
-  color: var(--fg);
-  -webkit-font-smoothing: antialiased;
-  -webkit-tap-highlight-color: transparent;
-  text-rendering: optimizeLegibility;
 }
 
 body {
+  font-family: var(--font-system);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   overscroll-behavior: none;
   user-select: none;
-  transition: background-color var(--dur) var(--ease-apple),
-    color var(--dur) var(--ease-apple);
+  // ponytail: no body-level background/color transition. The first paint already
+  // shows the correct theme (inline script in index.html sets data-theme before
+  // CSS runs), so a transition there is just a flicker source - and Playwright's
+  // getComputedStyle catches it mid-transition returning rgba(0,0,0,0.016)
+  // instead of the settled rgb(0,0,0), which broke the system-pref theme test.
 }
 
 button {
@@ -192,6 +244,7 @@ button {
   border: 0;
   padding: 0;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:focus-visible {
@@ -199,8 +252,22 @@ button:focus-visible {
   outline-offset: 4px;
 }
 
-/* Liquid Glass utility — subtle backdrop blur for elevated panels.
-   Falls back gracefully on browsers without backdrop-filter support. */
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* === Liquid Glass utility - subtle backdrop blur for elevated panels.
+   Falls back gracefully on browsers without backdrop-filter support. === */
 .liquid-glass {
   background: var(--bg-glass);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -213,10 +280,10 @@ button:focus-visible {
   }
 }
 
-/* Responsive shell widths.
+/* === Responsive shell widths.
    Phone: full-bleed up to 600px.
    Tablet (iPad): centered 720px column with side safe-area.
-   Desktop (Mac/Win/Linux): centered 480px column, similar to phone. */
+   Desktop (Mac/Win/Linux): centered 480px column, similar to phone. === */
 .shell {
   display: flex;
   flex-direction: column;
@@ -246,4 +313,208 @@ button:focus-visible {
     height: calc(100% - var(--s-12));
     overflow: hidden;
   }
+}
+
+/* === Shared framework components ===
+   These CSS hooks are owned by src/components/{Key,Chip,Panel,Field}.tsx.
+   Rules here are framework-level (touch-targets, press states) - component
+   visuals (colors, sizes) come from tokens. */
+
+/* Key press feedback - platform-native :active, fixes stuck-pressed bugs
+   the old onTouchStart transform hack had. */
+.ui-key:active {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-key);
+  filter: brightness(0.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-key:active {
+    transform: none;
+  }
+}
+
+/* Chip active state - the inverse pill (text becomes page bg, chip becomes
+   page text). Visible in both light + dark because both tokens resolve. */
+.ui-chip-segment {
+  display: inline-flex;
+  background: var(--key-fn-bg);
+  border-radius: var(--radius-full);
+  padding: 2px;
+  gap: 2px;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.ui-chip-segment > .ui-chip {
+  flex: 0 0 auto;
+}
+
+.ui-chip {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: transparent;
+  color: var(--text);
+  transition: background-color var(--dur) var(--ease-standard),
+    color var(--dur) var(--ease-standard);
+  white-space: nowrap;
+}
+
+.ui-chip[aria-selected='true'],
+.ui-chip[aria-checked='true'] {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.ui-chip:not([aria-selected='true']):not([aria-checked='true']):active,
+.ui-chip:not([aria-selected='true']):not([aria-checked='true'])[data-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Panel - elevated card surface with subtle shadow. Variant=danger swaps
+   palette to the danger soft fill. */
+.ui-panel {
+  padding: var(--s-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.ui-panel[data-variant='danger'] {
+  background: var(--danger-soft);
+  box-shadow: none;
+  color: var(--danger);
+}
+
+.ui-panel-label {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+/* Field - labeled input with hint / error slot. Used by SyncSettings + Date
+   + Units + Programmer. */
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.ui-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.ui-field-input {
+  width: 100%;
+  padding: var(--s-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.ui-field-input:disabled {
+  opacity: 0.5;
+}
+
+.ui-field-hint {
+  display: block;
+  margin-top: var(--s-1);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.ui-field-hint[data-variant='error'] {
+  color: var(--danger);
+}
+
+/* Section - SyncSettings heading block. */
+.ui-section {
+  margin-bottom: var(--s-5);
+}
+
+.ui-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--s-3) 0;
+}
+
+/* Modal - backdrop + panel, used by SyncSettings and any future overlay. */
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  padding: var(--s-4);
+}
+
+.ui-modal-panel {
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-elevated);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pill icon button - 32-44px circular surface, used in tab bars + toolbars. */
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  padding: 0 12px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--key-fn-bg);
+  color: var(--key-fn-fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ui-pill[data-size='lg'] {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.ui-pill:active {
+  filter: brightness(0.94);
+}
+
+/* Result primary / secondary text - display + result cards. */
+.ui-result-primary {
+  font-size: 32px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-result-secondary {
+  font-size: 14px;
+  color: var(--text-tertiary);
 }

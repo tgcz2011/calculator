@@ -1,5 +1,7 @@
 import type { Mode } from '../state/useCalculator';
 import type { AngleMode } from '../engine';
+import { Chip, ChipSegment } from './Chip';
+import { Pill } from './Panel';
 
 interface Props {
   mode: Mode;
@@ -7,6 +9,8 @@ interface Props {
   onMode(m: Mode): void;
   onAngle(a: AngleMode): void;
 }
+
+const MODES: Mode[] = ['basic', 'scientific', 'history', 'programmer', 'units', 'date'];
 
 export function TabBar({ mode, angle, onMode, onAngle }: Props) {
   return (
@@ -17,79 +21,34 @@ export function TabBar({ mode, angle, onMode, onAngle }: Props) {
         justifyContent: 'space-between',
         padding: 'var(--s-3) var(--s-4)',
         gap: 'var(--s-3)',
+        zIndex: 'var(--z-tabbar)',
       }}
     >
-      <div
-        role="tablist"
-        aria-label="Mode"
-        style={{
-          display: 'inline-flex',
-          background: 'var(--key-fn-bg)',
-          borderRadius: 'var(--r-full)',
-          padding: 2,
-          overflowX: 'auto',
-          maxWidth: '100%',
-        }}
-      >
-        <Tab active={mode === 'basic'} onClick={() => onMode('basic')}>
-          Basic
-        </Tab>
-        <Tab active={mode === 'scientific'} onClick={() => onMode('scientific')}>
-          Scientific
-        </Tab>
-        <Tab active={mode === 'history'} onClick={() => onMode('history')}>
-          History
-        </Tab>
-        <Tab active={mode === 'programmer'} onClick={() => onMode('programmer')}>
-          Programmer
-        </Tab>
-        <Tab active={mode === 'units'} onClick={() => onMode('units')}>
-          Units
-        </Tab>
-        <Tab active={mode === 'date'} onClick={() => onMode('date')}>
-          Date
-        </Tab>
-      </div>
-      <button
-        type="button"
+      <ChipSegment ariaLabel="Mode" layout="auto">
+        {MODES.map((m) => (
+          <Chip key={m} active={mode === m} onClick={() => onMode(m)}>
+            {labelFor(m)}
+          </Chip>
+        ))}
+      </ChipSegment>
+      <Pill
+        size="lg"
         onClick={() => onAngle(angle === 'deg' ? 'rad' : 'deg')}
-        aria-label={`Angle mode, currently ${angle.toUpperCase()}`}
-        style={{
-          width: 44,
-          height: 32,
-          borderRadius: 'var(--r-full)',
-          background: 'var(--key-fn-bg)',
-          color: 'var(--key-fn-fg)',
-          fontSize: 13,
-          fontWeight: 600,
-          letterSpacing: '0.04em',
-        }}
+        ariaLabel={`Angle mode, currently ${angle.toUpperCase()}`}
       >
         {angle.toUpperCase()}
-      </button>
+      </Pill>
     </div>
   );
 }
 
-function Tab({ active, onClick, children }: { active: boolean; onClick(): void; children: React.ReactNode }) {
-  return (
-    <button
-      role="tab"
-      aria-selected={active}
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: '6px 14px',
-        borderRadius: 'var(--r-full)',
-        fontSize: 13,
-        fontWeight: 600,
-        color: active ? 'var(--bg-elevated)' : 'var(--text)',
-        background: active ? 'var(--text)' : 'transparent',
-        transition: 'background-color var(--dur-normal) var(--ease-standard), color var(--dur-normal) var(--ease-standard)',
-        letterSpacing: '0.01em',
-      }}
-    >
-      {children}
-    </button>
-  );
+function labelFor(m: Mode): string {
+  switch (m) {
+    case 'basic': return 'Basic';
+    case 'scientific': return 'Scientific';
+    case 'history': return 'History';
+    case 'programmer': return 'Programmer';
+    case 'units': return 'Units';
+    case 'date': return 'Date';
+  }
 }

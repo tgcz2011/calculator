@@ -8,7 +8,9 @@
 // off-by-one diffs. Date.UTC(noon) keeps both endpoints anchored in real time
 // without TZ ambiguity for calendar arithmetic.
 
-import { type CSSProperties, useState } from 'react';
+import { useState } from 'react';
+import { Chip, ChipSegment } from './Chip';
+import { Panel, Pill } from './Panel';
 
 type SubTab = 'diff' | 'addsub' | 'weekday';
 
@@ -88,7 +90,7 @@ export function DateTime() {
       }}
       data-testid="date-mode"
     >
-      <div role="tablist" aria-label="Date sub-mode" style={subTabsStyle}>
+      <ChipSegment role="tablist" ariaLabel="Date sub-mode" layout="fill" shape="card">
         <SubTab active={tab === 'diff'} onClick={() => setTab('diff')}>
           差值
         </SubTab>
@@ -98,7 +100,7 @@ export function DateTime() {
         <SubTab active={tab === 'weekday'} onClick={() => setTab('weekday')}>
           星期
         </SubTab>
-      </div>
+      </ChipSegment>
 
       {tab === 'diff' && dateA && dateB && (
         <DiffView a={dateA} b={dateB} onA={setA} onB={setB} />
@@ -128,6 +130,22 @@ export function DateTime() {
   );
 }
 
+function SubTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick(): void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Chip active={active} onClick={onClick} fill>
+      {children}
+    </Chip>
+  );
+}
+
 function DiffView({
   a,
   b,
@@ -149,7 +167,7 @@ function DiffView({
           value={formatIso(a)}
           onChange={(e) => onA(e.target.value)}
           data-testid="date-a"
-          style={inputStyle}
+          className="ui-field-input"
         />
       </FieldRow>
       <FieldRow label="日期 B">
@@ -158,22 +176,22 @@ function DiffView({
           value={formatIso(b)}
           onChange={(e) => onB(e.target.value)}
           data-testid="date-b"
-          style={inputStyle}
+          className="ui-field-input"
         />
       </FieldRow>
-      <ResultCard testId="date-diff-result">
-        <div style={primaryResultStyle} data-testid="date-diff-days">
+      <Panel testId="date-diff-result">
+        <div className="ui-result-primary" data-testid="date-diff-days">
           {sign}
           {parts.days} 天
         </div>
-        <div style={secondaryResultStyle}>
+        <div className="ui-result-secondary">
           ≈ {parts.weeks} 周
           {' · '}
           {parts.monthsApprox} 月
           {' · '}
           {parts.yearsApprox} 年
         </div>
-      </ResultCard>
+      </Panel>
     </>
   );
 }
@@ -206,11 +224,12 @@ function AddSubView({
             value={base}
             onChange={(e) => onBase(e.target.value)}
             data-testid="date-base"
-            style={{ ...inputStyle, flex: 1 }}
+            className="ui-field-input"
+            style={{ flex: 1 }}
           />
-          <button type="button" onClick={onSetToday} style={todayBtnStyle} data-testid="date-today">
+          <Pill onClick={onSetToday} testId="date-today" ariaLabel="今天">
             今天
-          </button>
+          </Pill>
         </div>
       </FieldRow>
       <FieldRow label="天数（负数往前推）">
@@ -220,23 +239,23 @@ function AddSubView({
           onChange={(e) => onOffset(e.target.value)}
           step="1"
           data-testid="date-offset"
-          style={inputStyle}
+          className="ui-field-input"
         />
       </FieldRow>
       {result && valid && (
-        <ResultCard testId="date-addsub-result">
-          <div style={primaryResultStyle} data-testid="date-addsub-result-iso">
+        <Panel testId="date-addsub-result">
+          <div className="ui-result-primary" data-testid="date-addsub-result-iso">
             {formatIso(result)}
           </div>
-          <div style={secondaryResultStyle}>
+          <div className="ui-result-secondary">
             {WEEKDAYS_ZH[result.getUTCDay()]} · {WEEKDAYS_EN[result.getUTCDay()]}
           </div>
-        </ResultCard>
+        </Panel>
       )}
       {!valid && (
         <ErrorBlock>天数必须是整数</ErrorBlock>
       )}
-      <div style={secondaryResultStyle}>{`注: ${base} (${weekday})`}</div>
+      <div className="ui-result-secondary">{`注: ${base} (${weekday})`}</div>
     </>
   );
 }
@@ -260,136 +279,39 @@ function WeekdayView({
             value={formatIso(date)}
             onChange={(e) => onDate(e.target.value)}
             data-testid="date-weekday-input"
-            style={{ ...inputStyle, flex: 1 }}
+            className="ui-field-input"
+            style={{ flex: 1 }}
           />
-          <button type="button" onClick={onSetToday} style={todayBtnStyle} data-testid="date-today">
+          <Pill onClick={onSetToday} testId="date-today" ariaLabel="今天">
             今天
-          </button>
+          </Pill>
         </div>
       </FieldRow>
-      <ResultCard testId="date-weekday-result">
-        <div style={primaryResultStyle} data-testid="date-weekday-zh">
+      <Panel testId="date-weekday-result">
+        <div className="ui-result-primary" data-testid="date-weekday-zh">
           {WEEKDAYS_ZH[dow]}
         </div>
-        <div style={secondaryResultStyle} data-testid="date-weekday-en">
+        <div className="ui-result-secondary" data-testid="date-weekday-en">
           {WEEKDAYS_EN[dow]}
         </div>
-      </ResultCard>
+      </Panel>
     </>
   );
 }
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-1)' }}>
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg-secondary)' }}>{label}</span>
+    <label className="ui-field">
+      <span className="ui-field-label">{label}</span>
       {children}
     </label>
   );
 }
 
-function ResultCard({ testId, children }: { testId: string; children: React.ReactNode }) {
-  return (
-    <div
-      data-testid={testId}
-      style={{
-        padding: 'var(--s-4)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--bg-elevated)',
-        boxShadow: 'var(--shadow)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--s-1)',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 function ErrorBlock({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        padding: 'var(--s-3)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--danger-soft)',
-        color: 'var(--danger)',
-        fontSize: 14,
-      }}
-    >
-      {children}
-    </div>
+    <Panel variant="danger">
+      <span style={{ fontSize: 14 }}>{children}</span>
+    </Panel>
   );
 }
-
-function SubTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick(): void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      role="tab"
-      aria-selected={active}
-      type="button"
-      onClick={onClick}
-      style={{
-        flex: 1,
-        padding: '8px 0',
-        borderRadius: 'var(--radius-md)',
-        fontSize: 14,
-        fontWeight: 600,
-        background: active ? 'var(--text)' : 'transparent',
-        color: active ? 'var(--bg-elevated)' : 'var(--fg)',
-        transition: 'background-color var(--dur) var(--ease-apple), color var(--dur) var(--ease-apple)',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
-const subTabsStyle: CSSProperties = {
-  display: 'flex',
-  background: 'var(--key-fn-bg)',
-  borderRadius: 'var(--radius-md)',
-  padding: 4,
-};
-
-const inputStyle: CSSProperties = {
-  padding: 'var(--s-3)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--bg-elevated)',
-  border: '1px solid var(--hairline)',
-  color: 'var(--fg)',
-  fontSize: 16,
-  fontFamily: 'inherit',
-};
-
-const primaryResultStyle: CSSProperties = {
-  fontSize: 32,
-  fontWeight: 300,
-  letterSpacing: '-0.02em',
-  color: 'var(--fg)',
-  fontVariantNumeric: 'tabular-nums',
-};
-
-const secondaryResultStyle: CSSProperties = {
-  fontSize: 14,
-  color: 'var(--fg-tertiary)',
-};
-
-const todayBtnStyle: CSSProperties = {
-  padding: 'var(--s-3) var(--s-3)',
-  borderRadius: 'var(--radius-sm)',
-  background: 'var(--key-fn-bg)',
-  color: 'var(--key-fn-fg)',
-  fontSize: 13,
-  fontWeight: 600,
-  whiteSpace: 'nowrap',
-};
