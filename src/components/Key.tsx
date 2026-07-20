@@ -74,11 +74,11 @@ export function Key({
   }, [clearHoldTimer]);
   const style: CSSProperties = {
     flex: flex ?? (wide ? 2 : 1),
-    height: compact ? 'clamp(44px, 9vw, 56px)' : 'var(--key-size)',
-    minHeight: compact ? 'clamp(44px, 9vw, 56px)' : 'var(--key-size)',
+    height: compact ? 'clamp(48px, 10vw, 60px)' : 'var(--key-size)',
+    minHeight: compact ? 'clamp(48px, 10vw, 60px)' : 'var(--key-size)',
     margin: 'var(--s-1)',
     borderRadius: 'var(--radius-full)',
-    fontSize: compact ? 'clamp(14px, 3.2vw, 18px)' : 'var(--key-fs)',
+    fontSize: compact ? 'clamp(15px, 3.4vw, 18px)' : 'var(--key-fs)',
     fontWeight: 500,
     fontFamily: mono ? 'var(--font-mono)' : 'inherit',
     background: palette.bg,

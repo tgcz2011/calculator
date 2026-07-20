@@ -8,13 +8,15 @@
 // is mode-local, and the engine.evaluate path differs (options-driven BigInt
 // vs mathjs). Self-contained state keeps the mode's contract crisp.
 
-import { type ReactNode, useEffect, useReducer, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useReducer, useState } from 'react';
 import { engine, type Radix, type WordSize, type RadixRepr } from '../engine';
 import { history } from '../history/api';
 import { useI18n } from '../hooks/useI18n';
+import { type Locale, localizeErrorMessage } from '../i18n';
 import { Key } from './Key';
 import { Chip, ChipSegment } from './Chip';
 import { Panel } from './Panel';
+import { errorGlyph } from './Display';
 
 const RADIXES: { id: Radix; label: string; prefix: string }[] = [
   { id: 16, label: 'HEX', prefix: '0x' },
@@ -70,11 +72,68 @@ function radixRepField(repr: RadixRepr, radix: Radix): string {
   }
 }
 
-function lastNumberToken(expr: string): string {
-  // For radix switching: extract the most recent contiguous token of digits/letters
-  // at the end of the expression so we can reformat via toRadix.
-  const m = /([0-9A-Fa-f]+)\s*$/.exec(expr);
-  return m ? m[1] : '';
+// ponytail: radix switch must convert EVERY number token in the expr, not just
+// the trailing one. Old `lastNumberToken` only converted the last token, so
+// multi-token exprs like "10+5" in HEX silently changed meaning when switching
+// to DEC: only "5" was converted (still 5), leaving "10" as DEC 10 instead of
+// HEX 16. Result: 0x10+0x05 = 21 became 10+5 = 15 — a silent semantic change.
+// We now find all tokens, convert each via BigInt, and bail atomically if any
+// token fails to parse (no partial conversion — that would still lie).
+function replaceAllNumberTokens(
+  expr: string,
+  fromRadix: Radix,
+  toRadix: Radix,
+  wordSize: WordSize,
+): string {
+  // Match either a 0x/0o/0b prefixed literal OR a bare hex-digit run. Prefixed
+  // literals only appear via copy-paste (the Programmer keypad has no x/o/b
+  // keys), but we handle them defensively so they don't get mangled. The bare
+  // case is the normal one — the user types digits in the current radix.
+  const tokenRe = /(?:0[xX][0-9A-Fa-f]+|0[oO][0-7]+|0[bB][01]+|[0-9A-Fa-f]+)/g;
+  const matches = Array.from(expr.matchAll(tokenRe));
+  const conversions: { start: number; end: number; replacement: string }[] = [];
+  for (const m of matches) {
+    const token = m[0];
+    const start = m.index ?? 0;
+    const end = start + token.length;
+    let prefix: string;
+    let body: string;
+    if (/^0[xX]/.test(token)) {
+      prefix = '0x';
+      body = token.slice(2);
+    } else if (/^0[oO]/.test(token)) {
+      prefix = '0o';
+      body = token.slice(2);
+    } else if (/^0[bB]/.test(token)) {
+      prefix = '0b';
+      body = token.slice(2);
+    } else {
+      // Bare token: use fromRadix to determine the BigInt prefix. Matches the
+      // engine tokenizer, which parses bare digits in the active radix.
+      const radixPrefix = RADIXES.find((r) => r.id === fromRadix)?.prefix ?? '';
+      prefix = radixPrefix;
+      body = token;
+    }
+    // BigInt.toString() with no radix arg = base 10. Then engine.toRadix
+    // re-masks to wordSize (matches the evaluator) and gives us the unpadded
+    // representation for the target radix via radixRepField.
+    let dec: string;
+    try {
+      dec = BigInt(prefix + body.toLowerCase()).toString();
+    } catch {
+      return expr; // invalid token for the current radix — leave expr alone
+    }
+    const r = engine.toRadix(dec, wordSize);
+    const replacement = radixRepField(r, toRadix);
+    conversions.push({ start, end, replacement });
+  }
+  // Apply right-to-left so earlier indices stay valid as we slice.
+  conversions.sort((a, b) => b.start - a.start);
+  let newExpr = expr;
+  for (const c of conversions) {
+    newExpr = newExpr.slice(0, c.start) + c.replacement + newExpr.slice(c.end);
+  }
+  return newExpr;
 }
 
 interface UiState {
@@ -108,7 +167,7 @@ function reducer(s: UiState, a: Action): UiState {
 }
 
 export function Programmer() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [radix, setRadix] = useState<Radix>(16);
   const [wordSize, setWordSize] = useState<WordSize>(64);
   const [state, dispatch] = useReducer(reducer, {
@@ -196,8 +255,8 @@ export function Programmer() {
     }
   }
 
-  // Switching radix while an expression exists: re-evaluate as a pure conversion
-  // of the last token. Empty expr -> just toggle chip; result remains.
+  // Switching radix while an expression exists: reformat EVERY number token in
+  // the expr to the new radix. Empty expr -> just toggle chip; result remains.
   function onSwitchRadix(next: Radix) {
     setRadix(next);
     if (state.lastResult) {
@@ -205,30 +264,12 @@ export function Programmer() {
       // The new radix's display will be `radix(lastResult, next, wordSize)` via fmtRadix.
       dispatch({ kind: 'commit', repr: state.lastResult });
     } else if (state.expr) {
-      const token = lastNumberToken(state.expr);
-      if (token) {
-        // ponytail: toRadix() takes a DECIMAL string. The token was typed in the
-        // current radix, so convert it to dec first (e.g. "10" in HEX -> 16).
-        // Old code used parseInt(token, radix) which returns a Number and loses
-        // precision past 2^53 — a 16-hex-digit QWORD token like
-        // FFFFFFFFFFFFFFFF became an imprecise Number, and the reformatted expr
-        // was wrong. BigInt keeps QWORD-exact precision (matches the tokenizer,
-        // which parses via 0x/0o/0b prefixes + BigInt).
-        const prefix = RADIXES.find((r) => r.id === radix)?.prefix ?? '';
-        let dec: string;
-        try {
-          dec = BigInt(prefix + token.toLowerCase()).toString(10);
-        } catch {
-          return; // invalid token for the current radix — leave expr alone
-        }
-        const r = engine.toRadix(dec, wordSize);
-        // ponytail: write the UNPADDED representation into the expression.
-        // Old code used padByRadix (zero-padded to wordSize/4 or wordSize),
-        // which dropped 16- or 64-char zero-padded strings into the editable
-        // expr (e.g. 000000000000000F). Padding belongs only in the result/
-        // radix table below, not the user-editable expression.
-        const mapped = radixRepField(r, next);
-        const newExpr = state.expr.slice(0, state.expr.length - token.length) + mapped;
+      // Convert every number token (not just the last) so multi-token exprs
+      // like "10+5" in HEX become "16+5" in DEC, preserving the semantic value.
+      // If any token fails to parse, replaceAllNumberTokens returns the
+      // original expr unchanged — we skip the dispatch in that case.
+      const newExpr = replaceAllNumberTokens(state.expr, radix, next, wordSize);
+      if (newExpr !== state.expr) {
         dispatch({ kind: 'replace', expr: newExpr });
       }
     }
@@ -302,6 +343,7 @@ export function Programmer() {
         errorCode={(error ? errorCode : '') || live?.errorCode || ''}
         error={error || liveError}
         expr={state.expr}
+        locale={locale}
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -367,6 +409,7 @@ function Display({
   error,
   errorCode,
   expr,
+  locale,
 }: {
   radix: Radix;
   wordSize: WordSize;
@@ -375,10 +418,40 @@ function Display({
   error: string;
   errorCode: string;
   expr: string;
+  locale: Locale;
 }) {
   const primary = liveRepr
     ? fmtRadix(liveRepr, radix, wordSize)
     : liveValue;
+
+  // ponytail: localize the error + render a glyph, mirroring the main Display.
+  // Old Programmer Display dumped the raw Chinese engine string with no glyph,
+  // no localization, and no font emphasis — inconsistent with the main Display.
+  // Now en users see "Mismatched parentheses" with a ")" glyph in a soft-red
+  // circle, matching the main Display's pattern. data-error-code uses the real
+  // code (no 'ENGINE' fallback) so e2e/a11y can branch on INVALID_DIGIT etc.
+  const shownError = error
+    ? localizeErrorMessage(locale, errorCode || undefined, error)
+    : '';
+  const glyph = errorGlyph(errorCode || undefined);
+
+  const glyphStyle: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '1.6em',
+    height: '1.6em',
+    marginRight: '0.4em',
+    borderRadius: 'var(--radius-full)',
+    background: 'var(--danger-soft)',
+    color: 'var(--danger)',
+    fontSize: '0.8em',
+    fontWeight: 700,
+    fontFamily: 'var(--font-system)',
+    lineHeight: 1,
+    flexShrink: 0,
+    verticalAlign: 'middle',
+  };
 
   return (
     <Panel testId="prog-display">
@@ -397,11 +470,11 @@ function Display({
       </div>
       <div
         style={{
-          fontSize: 'clamp(20px, 5vw, 36px)',
-          fontWeight: 300,
+          fontSize: shownError ? 'clamp(22px, 4.5vw, 36px)' : 'clamp(20px, 5vw, 36px)',
+          fontWeight: shownError ? 500 : 300,
           letterSpacing: '-0.02em',
-          color: error ? 'var(--danger)' : 'var(--text)',
-          fontFamily: 'var(--font-mono)',
+          color: shownError ? 'var(--danger)' : 'var(--text)',
+          fontFamily: shownError ? 'var(--font-system)' : 'var(--font-mono)',
           textAlign: 'right',
           overflowWrap: 'anywhere',
           lineHeight: 1.1,
@@ -409,9 +482,18 @@ function Display({
         data-testid="prog-primary"
         data-radix={radix}
         data-word-size={wordSize}
-        data-error-code={error ? (errorCode || 'ENGINE') : undefined}
+        data-error-code={shownError ? (errorCode || undefined) : undefined}
       >
-        {error ? error : primary || '\u00a0'}
+        {shownError ? (
+          <>
+            {glyph && (
+              <span style={glyphStyle} aria-hidden="true">{glyph}</span>
+            )}
+            <span>{shownError}</span>
+          </>
+        ) : (
+          primary || '\u00a0'
+        )}
       </div>
       {liveRepr && (
         <div

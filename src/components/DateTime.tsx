@@ -208,7 +208,7 @@ function AddSubView({
   onOffset(s: string): void;
   onSetToday(): void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const date = parseIso(base);
   if (!date) return <ErrorBlock>{t('date.invalid')}</ErrorBlock>;
   const result = valid ? addDays(date, offset) : null;
@@ -249,8 +249,8 @@ function AddSubView({
           <div className="ui-result-primary" data-testid="date-addsub-result-iso">
             {formatIso(result)}
           </div>
-          <div className="ui-result-secondary">
-            {WEEKDAYS_ZH[result.getUTCDay()]} · {WEEKDAYS_EN[result.getUTCDay()]}
+          <div className="ui-result-secondary" data-testid="date-addsub-weekday">
+            {(locale === 'zh' ? WEEKDAYS_ZH : WEEKDAYS_EN)[result.getUTCDay()]}
           </div>
         </Panel>
       )}
@@ -271,8 +271,9 @@ function WeekdayView({
   onDate(s: string): void;
   onSetToday(): void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const dow = date.getUTCDay();
+  const weekday = (locale === 'zh' ? WEEKDAYS_ZH : WEEKDAYS_EN)[dow];
   return (
     <>
       <FieldRow label={t('date.field.input')}>
@@ -291,11 +292,11 @@ function WeekdayView({
         </div>
       </FieldRow>
       <Panel testId="date-weekday-result">
-        <div className="ui-result-primary" data-testid="date-weekday-zh">
-          {WEEKDAYS_ZH[dow]}
-        </div>
-        <div className="ui-result-secondary" data-testid="date-weekday-en">
-          {WEEKDAYS_EN[dow]}
+        <div
+          className="ui-result-primary"
+          data-testid={locale === 'zh' ? 'date-weekday-zh' : 'date-weekday-en'}
+        >
+          {weekday}
         </div>
       </Panel>
     </>

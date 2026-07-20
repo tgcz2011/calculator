@@ -371,6 +371,7 @@ export default function App() {
             onEquals={calc.equals}
             onUndo={calc.undo}
             onRedo={calc.redo}
+            liveSticky={calc.liveSticky}
           />
         </div>
       )}
@@ -397,6 +398,8 @@ export default function App() {
           onAllClear={calc.allClear}
           onEquals={calc.equals}
           onAngle={calc.setAngle}
+          onPercent={calc.percent}
+          onNegate={calc.negate}
         />
       )}
       {calc.state.mode !== 'history' && tier === 'phone' && (
