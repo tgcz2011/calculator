@@ -70,6 +70,8 @@ npm run dev          # web dev server (http://localhost:5173)
 npm run typecheck    # tsc, 0 errors
 npm run smoke        # contract smoke test (engine + history)
 npm run build        # vite build -> dist/
+npm run e2e:install  # one-time: install Playwright browsers
+npm run e2e          # end-to-end tests (4 device projects)
 ```
 
 Or: `./scripts/build.sh check`

@@ -70,6 +70,20 @@ function useIsPortrait(): boolean {
 // preference (skip picker) or let it clear (force picker).
 const LAST_PICK_KEY = 'calc:last-pick';
 
+// ponytail: a-z / A-Z -> self map. Hoisted to module scope so handleKey
+// doesn't rebuild it on every keydown. Lets users type identifiers
+// (foo+1 -> UNKNOWN_SYMBOL) and unknown functions (xyz(1) -> NOT_FUNCTION).
+const LETTER_KEY_MAP: Record<string, string> = (() => {
+  const m: Record<string, string> = {};
+  for (let c = 0; c < 26; c++) {
+    const lower = String.fromCharCode(97 + c);
+    const upper = String.fromCharCode(65 + c);
+    m[lower] = lower;
+    m[upper] = upper;
+  }
+  return m;
+})();
+
 function readLastPick(): Mode | null {
   try {
     const v = localStorage.getItem(LAST_PICK_KEY);
@@ -202,15 +216,8 @@ export default function App() {
       // every '×' to '*' (src/engine/index.ts:102), which collapses identifier-
       // leading '×' and breaks the unknown-function classification. '*' / '×'
       // button still work for multiplication.
-      const letterMap: Record<string, string> = {};
-      for (let c = 0; c < 26; c++) {
-        const lower = String.fromCharCode(97 + c);
-        const upper = String.fromCharCode(65 + c);
-        letterMap[lower] = lower;
-        letterMap[upper] = upper;
-      }
       const map: Record<string, string> = {
-        ...letterMap,
+        ...LETTER_KEY_MAP,
         '0': '0', '1': '1', '2': '2', '3': '3', '4': '4',
         '5': '5', '6': '6', '7': '7', '8': '8', '9': '9',
         '.': '.', ',': '.', '+': '+', '-': '-', '*': '×',
@@ -356,7 +363,7 @@ export default function App() {
         </div>
       )}
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
-        <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
             expression={calc.state.expression}
             result={calc.live}
