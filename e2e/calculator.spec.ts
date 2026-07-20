@@ -488,8 +488,10 @@ test.describe('Date / Time mode', () => {
     await page.getByRole('tab', { name: '日期' }).click();
     await page.getByRole('tab', { name: '星期' }).click();
     await page.getByTestId('date-weekday-input').fill('2025-01-01');
+    // Locale is pinned to zh (lang-pref=zh in clearAndSeedBasicSkip), so only
+    // the zh weekday should render; the en slot must not exist.
     await expect(page.getByTestId('date-weekday-zh')).toHaveText('星期三');
-    await expect(page.getByTestId('date-weekday-en')).toHaveText('Wednesday');
+    await expect(page.getByTestId('date-weekday-en')).toHaveCount(0);
   });
 
   test('today button fills current date', async ({ page }) => {

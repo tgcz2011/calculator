@@ -218,6 +218,10 @@ export interface Calculator {
    *  This is where deferred codes (UNCLOSED/PAREN/MISSING_OPERAND) appear. */
   committedError: string;
   committedErrorCode: string;
+  /** True when the displayed live result is the sticky last-good value
+   *  (current eval is a deferred error like UNCLOSED/PAREN/MISSING_OPERAND).
+   *  UI uses this to visually mark the result as stale. Value is unchanged. */
+  liveSticky: boolean;
   insert: (text: string) => void;
   backspace: () => void;
   clear: () => void;
@@ -230,6 +234,13 @@ export interface Calculator {
   redo: () => void;
   recall: (expr: string, result: string) => void;
   clearHistory: () => void;
+  /** Apple-style percent: rewrites the trailing number based on the operator
+   *  preceding it. See M1 in the UX fixes spec. */
+  percent: () => void;
+  /** Apple-style negate: empty -> `-`; otherwise evaluates `-(expr)` and
+   *  replaces the expression with the result. No-op when the expression
+   *  ends with an operator. */
+  negate: () => void;
 }
 
 export function useCalculator(): Calculator {
@@ -283,6 +294,15 @@ export function useCalculator(): Calculator {
     live.error && live.errorCode && DEFERRED_ERROR_CODES.has(live.errorCode)
       ? ''
       : live.errorCode;
+  // ponytail (M8): the displayed live value is "sticky" (last good value)
+  // when the current eval is a deferred error AND we have a last good value
+  // to show. UI uses this flag to dim the result so the user knows the value
+  // isn't fresh. The value itself is unchanged.
+  const liveSticky =
+    !!live.error &&
+    !!live.errorCode &&
+    DEFERRED_ERROR_CODES.has(live.errorCode) &&
+    !!lastGoodLiveRef.current;
 
   const insert = useCallback((text: string) => dispatch({ kind: 'insert', text }), []);
   const backspace = useCallback(() => dispatch({ kind: 'backspace' }), []);
@@ -315,6 +335,91 @@ export function useCalculator(): Calculator {
     dispatch({ kind: 'commit', result: r.value, error: '', errorCode: '' });
   }, [normalized, state.angle, state.expression]);
 
+  // ponytail (M1): Apple-style percent. The keypad used to insert `/100`
+  // verbatim, which gave `50+10%` = 50.1 instead of Apple's 55
+  // (= 50 + 10% of 50). This rewrites the trailing number based on the
+  // operator preceding it:
+  //   - empty / ends with operator: no-op (can't apply % to nothing)
+  //   - single number `50`        -> `(50/100)`              = 0.5
+  //   - `...+num` / `...-num`     -> `${expr}*(left)/100`   (left = evaluated LHS)
+  //   - `...*num` / `.../num`     -> `${expr}/100`          (50*10% = 5)
+  //   - anything else             -> fall back to `${expr}/100` (old behavior)
+  // We dispatch `commit` (not `insert`) because we're replacing the entire
+  // expression text — the spec's "rewrite" / "replace" wording. `commit`'s
+  // `committed` slot is only used as a "is there anything to clear?" flag,
+  // so overloading it here is safe.
+  const percent = useCallback(() => {
+    const expr = state.expression;
+    if (!expr) return;
+    // Strip trailing whitespace so the regex tests are robust.
+    const trimmed = expr.replace(/\s+$/, '');
+    if (!trimmed) return;
+    const last = trimmed[trimmed.length - 1];
+    if ('+-*/×÷'.includes(last)) return; // ends with operator -> no-op
+
+    // Single number? `50` -> `(50/100)`.
+    const single = trimmed.match(/^(\d+(?:\.\d+)?)$/);
+    if (single) {
+      dispatch({ kind: 'commit', result: `(${single[1]}/100)`, error: '', errorCode: '' });
+      return;
+    }
+
+    // Ends with `op number`?
+    const m = trimmed.match(/^(.*?)([+\-*/×÷])\s*(\d+(?:\.\d+)?)$/);
+    if (m) {
+      const [, left, op] = m;
+      if (op === '+' || op === '-') {
+        // Evaluate the LHS so e.g. `50+10+20` -> `50+10+20*(60)/100` = 72.
+        const leftNorm = normalize(left);
+        const leftRes = engine.evaluate(leftNorm, { angle: state.angle });
+        if (leftRes.error || !leftRes.value) {
+          // Couldn't evaluate LHS — fall back to old `/100` behavior.
+          dispatch({ kind: 'commit', result: `${trimmed}/100`, error: '', errorCode: '' });
+          return;
+        }
+        dispatch({
+          kind: 'commit',
+          result: `${trimmed}*(${leftRes.value})/100`,
+          error: '',
+          errorCode: '',
+        });
+        return;
+      }
+      // `*` or `/`: Apple treats `50*10%` as `50*0.1` = 5 = `50*10/100`.
+      dispatch({ kind: 'commit', result: `${trimmed}/100`, error: '', errorCode: '' });
+      return;
+    }
+
+    // Otherwise (e.g. ends with `)` or `!`): fall back to old `/100` behavior.
+    dispatch({ kind: 'commit', result: `${trimmed}/100`, error: '', errorCode: '' });
+  }, [state.expression, state.angle]);
+
+  // ponytail (M2): Apple-style negate. The keypad used to insert `*(-1)`
+  // verbatim, which silently failed on empty expressions (no visible error
+  // — MISSING_OPERAND is deferred). Now:
+  //   - empty expr           -> insert `-` (negative sign prefix)
+  //   - ends with operator   -> no-op (can't negate nothing)
+  //   - otherwise            -> evaluate `-(expr)` and replace expression
+  //                            with the result. If evaluation fails, no-op.
+  const negate = useCallback(() => {
+    const expr = state.expression;
+    if (!expr) {
+      dispatch({ kind: 'insert', text: '-' });
+      return;
+    }
+    const trimmed = expr.replace(/\s+$/, '');
+    if (!trimmed) {
+      dispatch({ kind: 'insert', text: '-' });
+      return;
+    }
+    const last = trimmed[trimmed.length - 1];
+    if ('+-*/×÷'.includes(last)) return; // ends with operator -> no-op
+
+    const r = engine.evaluate(`-(${normalized})`, { angle: state.angle });
+    if (r.error || !r.value) return; // eval failed -> no-op (don't corrupt expr)
+    dispatch({ kind: 'commit', result: r.value, error: '', errorCode: '' });
+  }, [state.expression, state.angle, normalized]);
+
   const recall = useCallback(
     (expression: string, result: string) => {
       dispatch({ kind: 'insert', text: expression });
@@ -338,6 +443,7 @@ export function useCalculator(): Calculator {
     liveErrorCode,
     committedError: state.committedError,
     committedErrorCode: state.committedErrorCode,
+    liveSticky,
     insert,
     backspace,
     clear,
@@ -350,5 +456,7 @@ export function useCalculator(): Calculator {
     redo,
     recall,
     clearHistory,
+    percent,
+    negate,
   };
 }

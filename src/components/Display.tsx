@@ -20,7 +20,7 @@ const ERROR_GLYPHS: Record<string, string> = {
   ENGINE: '!',
 };
 
-function errorGlyph(code: string | undefined): string | null {
+export function errorGlyph(code: string | undefined): string | null {
   if (!code) return null;
   return ERROR_GLYPHS[code] ?? '!';
 }
@@ -40,6 +40,7 @@ interface Props {
   onUndo(): void;
   onRedo(): void;
   readOnly?: boolean;
+  liveSticky?: boolean;
 }
 
 export function Display(props: Props) {
@@ -146,6 +147,12 @@ export function Display(props: Props) {
     overflowWrap: 'break-word',
     wordBreak: 'break-all',
     flexShrink: 0,
+    // ponytail (M8): when the live result is sticky (showing the last good
+    // value while the user types an incomplete expression), italicize it so
+    // the user can tell the displayed value isn't fresh. Don't change the
+    // value or opacity — opacity < 1 creates a compositing layer that can
+    // intercept pointer events on the keypad below (e2e regression).
+    fontStyle: props.liveSticky ? 'italic' : 'normal',
     // ponytail: trim huge font on error so "Mismatched parentheses" doesn't overflow.
     ...(shownError ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
   };
@@ -161,7 +168,7 @@ export function Display(props: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <input
         ref={ref}
-        value={props.expression || (shownError ? shownError : '0')}
+        value={props.expression || '0'}
         onSelect={onSelect}
         onClick={onSelect}
         onKeyDown={onKey}
@@ -179,6 +186,7 @@ export function Display(props: Props) {
         aria-live="polite"
         data-error-code={shownError && props.errorCode ? props.errorCode : undefined}
         data-error={shownError ? 'true' : undefined}
+        data-sticky={props.liveSticky ? 'true' : undefined}
       >
         {shownError ? (
           <>

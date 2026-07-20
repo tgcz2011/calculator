@@ -15,6 +15,8 @@ interface Props {
   onAllClear(): void;
   onEquals(): void;
   onAngle(m: AngleMode): void;
+  onPercent(): void;
+  onNegate(): void;
 }
 
 interface FuncDef {
@@ -102,8 +104,8 @@ export function Keypad(props: Props) {
         <Key label="⌫" variant="fn" onClick={props.onBackspace} ariaLabel="Backspace" />
       </Row>
       <Row>
-        <Key label="±" variant="fn" onClick={() => props.onInsert('*(-1)')} ariaLabel="Negate" />
-        <Key label="%" variant="fn" onClick={() => props.onInsert('/100')} ariaLabel="Percent" />
+        <Key label="±" variant="fn" onClick={props.onNegate} ariaLabel="Negate" />
+        <Key label="%" variant="fn" onClick={props.onPercent} ariaLabel="Percent" />
         <Key label="÷" variant="op" onClick={() => props.onInsert('÷')} ariaLabel="Divide" />
         <Key label="×" variant="op" onClick={() => props.onInsert('×')} ariaLabel="Multiply" />
       </Row>
