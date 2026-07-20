@@ -9,6 +9,7 @@
 // vault pw). Forces explicit reconnect after each session.
 
 import { type CSSProperties, useState } from 'react';
+import { useI18n } from '../hooks/useI18n';
 import { useSync, type ProviderId } from '../hooks/useSync';
 import {
   JIANGUOYUN_PRESET,
@@ -35,6 +36,7 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
 };
 
 export function SyncSettings({ open, onClose }: Props) {
+  const { t } = useI18n();
   const sync = useSync();
   const [password, setPassword] = useState('');
   const [passphrase, setPassphrase] = useState('');
@@ -77,7 +79,7 @@ export function SyncSettings({ open, onClose }: Props) {
   return (
     <Modal open={open} onClose={onClose} ariaLabel="同步设置" testId="sync-settings">
       <div style={headerStyle}>
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>同步</h2>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{t('sync.title')}</h2>
         <Pill onClick={onClose} ariaLabel="关闭">
           {'\u2715'}
         </Pill>
@@ -88,7 +90,7 @@ export function SyncSettings({ open, onClose }: Props) {
         <StatusBanner status={sync.status} onSyncNow={sync.syncNow} connected={!!sync.connected} />
 
         {/* Provider selection */}
-        <Section title="服务">
+        <Section title={t('sync.section.service')}>
           <div role="radiogroup" aria-label="Provider" style={radioGroupStyle}>
             {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
               <label key={id} style={radioLabelStyle}>
@@ -113,16 +115,16 @@ export function SyncSettings({ open, onClose }: Props) {
           )}
           {sync.config.provider === 'icloud' && (
             <p style={hintStyle}>
-              iCloud 同步等待原生 bridge 落地（P2）。其他平台请用 WebDAV / 坚果云。
+              {t('sync.icloud.placeholder')}
             </p>
           )}
         </Section>
 
         {/* WebDAV config */}
         {sync.config.provider !== 'icloud' && (
-          <Section title="服务器">
+          <Section title={t('sync.section.server')}>
             <Field
-              label="Endpoint"
+              label={t('sync.field.endpoint')}
               hint={undefined}
             >
               <input
@@ -136,7 +138,7 @@ export function SyncSettings({ open, onClose }: Props) {
                 data-testid="sync-endpoint"
               />
             </Field>
-            <Field label="用户名">
+            <Field label={t('sync.field.username')}>
               <input
                 type="text"
                 value={sync.config.username}
@@ -148,7 +150,7 @@ export function SyncSettings({ open, onClose }: Props) {
               />
             </Field>
             <Field
-              label="密码 / 应用密码"
+              label={t('sync.field.password')}
             >
               <input
                 type="password"
@@ -160,7 +162,7 @@ export function SyncSettings({ open, onClose }: Props) {
                 data-testid="sync-password"
               />
             </Field>
-            <Field label="路径">
+            <Field label={t('sync.field.path')}>
               <input
                 type="text"
                 value={sync.config.path}
@@ -176,10 +178,10 @@ export function SyncSettings({ open, onClose }: Props) {
 
         {/* Passphrase */}
         {sync.config.provider !== 'icloud' && (
-          <Section title="端到端加密">
+          <Section title={t('sync.section.encryption')}>
             <Field
-              label="Passphrase（≥ 8 位）"
-              hint="用于加密历史 blob；只在本会话内存，不写入磁盘。换设备或换 passphrase 都能解密，但丢 passphrase 数据就回不来。"
+              label={t('sync.field.passphrase')}
+              hint={t('sync.field.passphrase.hint')}
             >
               <input
                 type="password"
@@ -192,8 +194,8 @@ export function SyncSettings({ open, onClose }: Props) {
               />
             </Field>
             <Field
-              label="确认 passphrase"
-              error={confirmPassphrase && passphrase !== confirmPassphrase ? '两次输入不一致' : undefined}
+              label={t('sync.field.passphrase.confirm')}
+              error={confirmPassphrase && passphrase !== confirmPassphrase ? t('sync.field.passphrase.mismatch') : undefined}
             >
               <input
                 type="password"
@@ -221,7 +223,7 @@ export function SyncSettings({ open, onClose }: Props) {
               }}
               data-testid="sync-connect"
             >
-              连接
+              {t('sync.action.connect')}
             </button>
           ) : (
             <button
@@ -230,7 +232,7 @@ export function SyncSettings({ open, onClose }: Props) {
               style={dangerBtnStyle}
               data-testid="sync-disconnect"
             >
-              断开连接
+              {t('sync.action.disconnect')}
             </button>
           )}
         </div>
@@ -248,16 +250,17 @@ function StatusBanner({
   onSyncNow(): Promise<unknown>;
   connected: boolean;
 }) {
+  const { t } = useI18n();
   const palette: Record<string, { bg: string; fg: string; label: string }> = {
-    idle: { bg: 'var(--bg-elevated)', fg: 'var(--text-secondary)', label: '未连接' },
-    connecting: { bg: 'var(--accent-soft)', fg: 'var(--accent)', label: '正在连接...' },
-    connected: { bg: 'var(--accent-soft)', fg: 'var(--accent)', label: '已同步' },
-    error: { bg: 'var(--danger-soft)', fg: 'var(--danger)', label: '出错' },
+    idle: { bg: 'var(--bg-elevated)', fg: 'var(--text-secondary)', label: t('sync.status.idle') },
+    connecting: { bg: 'var(--accent-soft)', fg: 'var(--accent)', label: t('sync.status.connecting') },
+    connected: { bg: 'var(--accent-soft)', fg: 'var(--accent)', label: t('sync.status.connected') },
+    error: { bg: 'var(--danger-soft)', fg: 'var(--danger)', label: t('sync.status.error') },
   };
   const tone = palette[status.kind] ?? palette.idle;
   let label = tone.label;
   if (status.kind === 'connected') {
-    label = `${tone.label} · ${formatTime(status.lastSync)} · ${status.entries} 条`;
+    label = t('sync.status.connected.summary', { time: formatTime(status.lastSync), count: status.entries });
   } else if (status.kind === 'error') {
     label = `${tone.label}: ${status.message}`;
   }
@@ -287,7 +290,7 @@ function StatusBanner({
           style={linkBtnStyle}
           data-testid="sync-now"
         >
-          立即同步
+          {t('sync.action.syncNow')}
         </button>
       )}
     </div>

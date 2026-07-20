@@ -7,7 +7,7 @@
 // raced the click and left buttons stuck at scale(0.97) if the touch was cancelled.
 // :active is the platform-native press state and handles cancellation correctly.
 
-import { type CSSProperties, type ReactNode } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useRef } from 'react';
 
 export type KeyVariant = 'num' | 'fn' | 'op' | 'danger';
 
@@ -50,13 +50,35 @@ export function Key({
 }: KeyProps) {
   const compact = size === 'compact';
   const palette = paletteFor(variant);
+
+  // Long-press via pointer events: a 500ms timer started on pointerdown,
+  // cancelled on pointerup/pointerleave/pointercancel. Works for mouse and
+  // touch. If onHold is undefined, the timer is never armed (no-op).
+  const holdTimer = useRef<number | null>(null);
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimer.current !== null) {
+      window.clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  }, []);
+  const handlePointerDown = useCallback(() => {
+    if (!onHold) return;
+    clearHoldTimer();
+    holdTimer.current = window.setTimeout(() => {
+      holdTimer.current = null;
+      onHold();
+    }, 500);
+  }, [onHold, clearHoldTimer]);
+  const handlePointerUp = useCallback(() => {
+    clearHoldTimer();
+  }, [clearHoldTimer]);
   const style: CSSProperties = {
     flex: flex ?? (wide ? 2 : 1),
-    height: compact ? 'clamp(40px, 8vw, 52px)' : 'var(--key-size)',
-    minHeight: compact ? 'clamp(40px, 8vw, 52px)' : 'var(--key-size)',
+    height: compact ? 'clamp(44px, 9vw, 56px)' : 'var(--key-size)',
+    minHeight: compact ? 'clamp(44px, 9vw, 56px)' : 'var(--key-size)',
     margin: 'var(--s-1)',
     borderRadius: 'var(--radius-full)',
-    fontSize: compact ? 'clamp(13px, 3vw, 18px)' : 'var(--key-fs)',
+    fontSize: compact ? 'clamp(14px, 3.2vw, 18px)' : 'var(--key-fs)',
     fontWeight: 500,
     fontFamily: mono ? 'var(--font-mono)' : 'inherit',
     background: palette.bg,
@@ -79,7 +101,10 @@ export function Key({
     <button
       type="button"
       onClick={onClick}
-      onDoubleClick={onHold}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
       data-testid={testId}

@@ -14,12 +14,14 @@ import {
   type CategoryDef,
   type UnitDef,
 } from '../units/engine';
+import { useI18n } from '../hooks/useI18n';
 import { Chip, ChipSegment } from './Chip';
 import { Panel, PanelLabel, Pill } from './Panel';
 
 type CatId = CategoryDef['id'];
 
 export function Units() {
+  const { t } = useI18n();
   const [categoryId, setCategoryId] = useState<CatId>('length');
   const [amount, setAmount] = useState('1');
   const [from, setFrom] = useState<string>('km');
@@ -72,12 +74,12 @@ export function Units() {
 
       {category.id === 'currency' && (
         <div style={stampStyle} data-testid="currency-snapshot">
-          快照汇率 · 更新于 {formatStamp(CURRENCY_UPDATED_AT)} · 离线可用
+          {t('units.currency.snapshot', { date: formatStamp(CURRENCY_UPDATED_AT) })}
         </div>
       )}
 
       <AmountField
-        label="数值"
+        label={t('units.amount')}
         value={amount}
         onChange={setAmount}
         testId="units-amount"
@@ -86,7 +88,7 @@ export function Units() {
       <div style={{ display: 'flex', gap: 'var(--s-2)', alignItems: 'flex-end' }}>
         <div style={{ flex: 1 }}>
           <UnitPicker
-            label="从"
+            label={t('units.from')}
             units={category.units}
             value={from}
             onChange={setFrom}
@@ -96,14 +98,14 @@ export function Units() {
         <Pill
           size="md"
           onClick={swap}
-          ariaLabel="互换单位"
+          ariaLabel={t('units.swap')}
           testId="units-swap"
         >
           {'\u21C4'}
         </Pill>
         <div style={{ flex: 1 }}>
           <UnitPicker
-            label="到"
+            label={t('units.to')}
             units={category.units}
             value={to}
             onChange={setTo}
@@ -192,6 +194,7 @@ function ResultCard({
   error?: string;
   errorCode?: string;
 }) {
+  const { t } = useI18n();
   if (error) {
     return (
       <Panel testId="units-result" variant="danger">
@@ -202,7 +205,7 @@ function ResultCard({
   }
   return (
     <Panel testId="units-result">
-      <PanelLabel>结果</PanelLabel>
+      <PanelLabel>{t('units.result')}</PanelLabel>
       <span
         data-testid="units-result-value"
         className="ui-result-primary"
