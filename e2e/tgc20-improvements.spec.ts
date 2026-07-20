@@ -215,4 +215,74 @@ test.describe('Basic mode backspace (item 5)', () => {
     await page.getByRole('button', { name: 'Backspace' }).click();
     await expect.poll(() => resultLocator(page).getAttribute('data-error-code')).toBeNull();
   });
+
+  // ponytail (TGC-20 hotfix): button-click BS was the only path exercised
+  // before, which is why 412 tests missed the double-dispatch. Click the
+  // input to put real focus on it (matching user behaviour), then press BS
+  // via keyboard — Display's local onKeyDown and App's window listener both
+  // see the event; without the guard one press deleted two characters.
+  test('keyboard Backspace on focused input deletes exactly one character', async ({ page }) => {
+    await seedBasicSkip(page);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const input = page.locator('input[aria-label="Expression"]');
+    // Build "1234" via the keypad so the cursor naturally lands at end (4).
+    for (const k of ['1', '2', '3', '4']) {
+      await page.getByRole('button', { name: k, exact: true }).click();
+    }
+    await expect(input.inputValue()).resolves.toBe('1234');
+    // Now click the input to put real focus on it (user behaviour: edit in
+    // place after typing). We need the click to land at the RIGHT edge of
+    // the input so the caret stays at end (the text is right-aligned, so a
+    // default center click lands in the empty left gutter and moves the
+    // caret to position 0). The double-dispatch path is cursor-at-end; if
+    // we land elsewhere, App's window handler bails out and the test no
+    // longer exercises the bug.
+    const box = await input.boundingBox();
+    if (!box) throw new Error('input boundingBox is null');
+    await page.mouse.click(box.x + box.width - 8, box.y + box.height / 2);
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute('aria-label') === 'Expression',
+    );
+    // Single BS press — must delete exactly one char, not two.
+    await page.keyboard.press('Backspace');
+    await expect(input.inputValue()).resolves.toBe('123');
+    await page.keyboard.press('Backspace');
+    await expect(input.inputValue()).resolves.toBe('12');
+    await page.keyboard.press('Backspace');
+    await expect(input.inputValue()).resolves.toBe('1');
+  });
+
+  // ponytail (TGC-20 hotfix): same key-scoped guard should also fix the
+  // related Enter-double-history bug (two equals() calls would record the
+  // same expression twice into history). One press, one history entry.
+  test('keyboard Enter on focused input records history exactly once', async ({ page }) => {
+    await seedBasicSkip(page);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    const input = page.locator('input[aria-label="Expression"]');
+    // Operators expose aria-label = "Add" / "Subtract" etc., not the visible
+    // symbol. We click the keypad buttons directly with the accessible name.
+    await page.getByRole('button', { name: '2', exact: true }).click();
+    await page.getByRole('button', { name: 'Add' }).click();
+    await page.getByRole('button', { name: '3', exact: true }).click();
+    const box = await input.boundingBox();
+    if (!box) throw new Error('input boundingBox is null');
+    await page.mouse.click(box.x + box.width - 8, box.y + box.height / 2);
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute('aria-label') === 'Expression',
+    );
+    // Pre-fix (TGC-20 hotfix), a single Enter press on the focused input
+    // called calc.equals() twice — Display's local onKeyDown and App's
+    // window listener each dispatched once — so two history entries landed
+    // for the same 2+3 expression. After the fix, exactly one entry.
+    await page.keyboard.press('Enter');
+    await expect(resultLocator(page)).toContainText('5');
+    const historyCount = await page.evaluate(() => {
+      const raw = localStorage.getItem('calc:history');
+      const arr = raw ? (JSON.parse(raw) as Array<{ result: string }>) : [];
+      return arr.filter((e) => e.result === '5').length;
+    });
+    expect(historyCount).toBe(1);
+  });
 });
