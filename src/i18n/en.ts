@@ -66,4 +66,60 @@ export const en: Record<string, string> = {
   'history.empty.title': 'No history yet',
   'history.empty.desc': 'Calculations you run will appear here',
   'history.clear': 'Clear',
+
+  // App-level hints
+  'app.hint.rotate': 'Landscape works better — rotate to expand scientific functions',
+  'app.hint.ac': 'Tap AC to clear · long-press AC to reset',
+
+  // Programmer mode
+  'prog.radix': 'Radix',
+  'prog.wordSize': 'Word size',
+
+  // Units mode
+  'units.amount': 'Amount',
+  'units.from': 'From',
+  'units.to': 'To',
+  'units.swap': 'Swap units',
+  'units.result': 'Result',
+  'units.currency.snapshot': 'Snapshot rates · updated {date} · works offline',
+
+  // Date/Time mode
+  'date.sub.diff': 'Difference',
+  'date.sub.addsub': 'Add/Subtract',
+  'date.sub.weekday': 'Weekday',
+  'date.field.a': 'Date A',
+  'date.field.b': 'Date B',
+  'date.field.base': 'Base date',
+  'date.field.input': 'Date',
+  'date.today': 'Today',
+  'date.offset.label': 'Days (negative to go back)',
+  'date.note': 'Note: {date} ({weekday})',
+  'date.invalid': 'Enter a valid date (YYYY-MM-DD)',
+  'date.offset.invalid': 'Days must be an integer',
+  'date.diff.days': '{n} days',
+  'date.diff.summary': '≈ {weeks} weeks · {months} months · {years} years',
+
+  // Sync settings
+  'sync.title': 'Sync',
+  'sync.section.service': 'Service',
+  'sync.section.server': 'Server',
+  'sync.section.encryption': 'End-to-end encryption',
+  'sync.field.endpoint': 'Endpoint',
+  'sync.field.username': 'Username',
+  'sync.field.password': 'Password / App password',
+  'sync.field.path': 'Path',
+  'sync.field.passphrase': 'Passphrase (≥ 8 chars)',
+  'sync.field.passphrase.hint': 'Encrypts the history blob; held in memory only, never written to disk. Works across devices or passphrases — lose the passphrase, lose the data.',
+  'sync.field.passphrase.confirm': 'Confirm passphrase',
+  'sync.field.passphrase.mismatch': 'Passphrases don\'t match',
+  'sync.action.connect': 'Connect',
+  'sync.action.disconnect': 'Disconnect',
+  'sync.action.syncNow': 'Sync now',
+  'sync.status.idle': 'Not connected',
+  'sync.status.connecting': 'Connecting...',
+  'sync.status.connected': 'Connected',
+  'sync.status.error': 'Error',
+  'sync.status.entriesSuffix': 'entries',
+  'sync.status.connected.summary': 'Connected · {time} · {count} entries',
+  'sync.icloud.placeholder': 'iCloud sync waiting for native bridge (P2). Use WebDAV / Jianguoyun on other platforms.',
 };

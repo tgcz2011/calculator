@@ -352,7 +352,7 @@ export default function App() {
           }}
           data-testid="rotate-hint"
         >
-          横屏体验更佳 · 旋转设备以展开科学函数键盘
+          {t('app.hint.rotate')}
         </div>
       )}
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
@@ -401,7 +401,7 @@ export default function App() {
       )}
       {calc.state.mode !== 'history' && tier === 'phone' && (
         <div style={{ textAlign: 'center', padding: 'var(--s-1)', color: 'var(--fg-tertiary)', fontSize: 11 }}>
-          Tap AC to clear · long-press AC to reset
+          {t('app.hint.ac')}
         </div>
       )}
       <SyncSettings open={syncOpen} onClose={() => setSyncOpen(false)} />

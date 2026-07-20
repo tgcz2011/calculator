@@ -9,6 +9,7 @@
 // without TZ ambiguity for calendar arithmetic.
 
 import { useState } from 'react';
+import { useI18n } from '../hooks/useI18n';
 import { Chip, ChipSegment } from './Chip';
 import { Panel, Pill } from './Panel';
 
@@ -66,6 +67,7 @@ function addDays(d: Date, n: number): Date {
 }
 
 export function DateTime() {
+  const { t } = useI18n();
   const [tab, setTab] = useState<SubTab>('diff');
   const [a, setA] = useState(todayIso);
   const [b, setB] = useState(todayIso);
@@ -90,13 +92,13 @@ export function DateTime() {
     >
       <ChipSegment role="tablist" ariaLabel="Date sub-mode" layout="fill" shape="card">
         <SubTab active={tab === 'diff'} onClick={() => setTab('diff')}>
-          差值
+          {t('date.sub.diff')}
         </SubTab>
         <SubTab active={tab === 'addsub'} onClick={() => setTab('addsub')}>
-          加减
+          {t('date.sub.addsub')}
         </SubTab>
         <SubTab active={tab === 'weekday'} onClick={() => setTab('weekday')}>
-          星期
+          {t('date.sub.weekday')}
         </SubTab>
       </ChipSegment>
 
@@ -104,7 +106,7 @@ export function DateTime() {
         <DiffView a={dateA} b={dateB} onA={setA} onB={setB} />
       )}
       {tab === 'diff' && (!dateA || !dateB) && (
-        <ErrorBlock>请输入有效日期（YYYY-MM-DD）</ErrorBlock>
+        <ErrorBlock>{t('date.invalid')}</ErrorBlock>
       )}
 
       {tab === 'addsub' && (
@@ -122,7 +124,7 @@ export function DateTime() {
         <WeekdayView date={dateA} onDate={setA} onSetToday={() => setA(todayIso())} />
       )}
       {tab === 'weekday' && !dateA && (
-        <ErrorBlock>请输入有效日期（YYYY-MM-DD）</ErrorBlock>
+        <ErrorBlock>{t('date.invalid')}</ErrorBlock>
       )}
     </div>
   );
@@ -155,11 +157,12 @@ function DiffView({
   onA(s: string): void;
   onB(s: string): void;
 }) {
+  const { t } = useI18n();
   const parts = diffParts(a, b);
   const sign = parts.days > 0 ? '+' : '';
   return (
     <>
-      <FieldRow label="日期 A">
+      <FieldRow label={t('date.field.a')}>
         <input
           type="date"
           value={formatIso(a)}
@@ -168,7 +171,7 @@ function DiffView({
           className="ui-field-input"
         />
       </FieldRow>
-      <FieldRow label="日期 B">
+      <FieldRow label={t('date.field.b')}>
         <input
           type="date"
           value={formatIso(b)}
@@ -180,14 +183,10 @@ function DiffView({
       <Panel testId="date-diff-result">
         <div className="ui-result-primary" data-testid="date-diff-days">
           {sign}
-          {parts.days} 天
+          {t('date.diff.days', { n: parts.days })}
         </div>
         <div className="ui-result-secondary">
-          ≈ {parts.weeks} 周
-          {' · '}
-          {parts.monthsApprox} 月
-          {' · '}
-          {parts.yearsApprox} 年
+          {t('date.diff.summary', { weeks: parts.weeks, months: parts.monthsApprox, years: parts.yearsApprox })}
         </div>
       </Panel>
     </>
@@ -209,8 +208,9 @@ function AddSubView({
   onOffset(s: string): void;
   onSetToday(): void;
 }) {
+  const { t } = useI18n();
   const date = parseIso(base);
-  if (!date) return <ErrorBlock>请输入有效日期（YYYY-MM-DD）</ErrorBlock>;
+  if (!date) return <ErrorBlock>{t('date.invalid')}</ErrorBlock>;
   const result = valid ? addDays(date, offset) : null;
   // ponytail: the note labels the *base* date string, so its weekday must be
   // the base date's, not the result's. Old code used result.getUTCDay() when
@@ -219,7 +219,7 @@ function AddSubView({
   const baseWeekday = WEEKDAYS_ZH[date.getUTCDay()];
   return (
     <>
-      <FieldRow label="基准日期">
+      <FieldRow label={t('date.field.base')}>
         <div style={{ display: 'flex', gap: 'var(--s-2)' }}>
           <input
             type="date"
@@ -229,12 +229,12 @@ function AddSubView({
             className="ui-field-input"
             style={{ flex: 1 }}
           />
-          <Pill onClick={onSetToday} testId="date-today" ariaLabel="今天">
-            今天
+          <Pill onClick={onSetToday} testId="date-today" ariaLabel={t('date.today')}>
+            {t('date.today')}
           </Pill>
         </div>
       </FieldRow>
-      <FieldRow label="天数（负数往前推）">
+      <FieldRow label={t('date.offset.label')}>
         <input
           type="number"
           value={offset}
@@ -255,9 +255,9 @@ function AddSubView({
         </Panel>
       )}
       {!valid && (
-        <ErrorBlock>天数必须是整数</ErrorBlock>
+        <ErrorBlock>{t('date.offset.invalid')}</ErrorBlock>
       )}
-      <div className="ui-result-secondary">{`注: ${base} (${baseWeekday})`}</div>
+      <div className="ui-result-secondary">{t('date.note', { date: base, weekday: baseWeekday })}</div>
     </>
   );
 }
@@ -271,10 +271,11 @@ function WeekdayView({
   onDate(s: string): void;
   onSetToday(): void;
 }) {
+  const { t } = useI18n();
   const dow = date.getUTCDay();
   return (
     <>
-      <FieldRow label="日期">
+      <FieldRow label={t('date.field.input')}>
         <div style={{ display: 'flex', gap: 'var(--s-2)' }}>
           <input
             type="date"
@@ -284,8 +285,8 @@ function WeekdayView({
             className="ui-field-input"
             style={{ flex: 1 }}
           />
-          <Pill onClick={onSetToday} testId="date-today" ariaLabel="今天">
-            今天
+          <Pill onClick={onSetToday} testId="date-today" ariaLabel={t('date.today')}>
+            {t('date.today')}
           </Pill>
         </div>
       </FieldRow>

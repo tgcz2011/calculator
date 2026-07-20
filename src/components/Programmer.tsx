@@ -11,6 +11,7 @@
 import { type ReactNode, useEffect, useReducer, useState } from 'react';
 import { engine, type Radix, type WordSize, type RadixRepr } from '../engine';
 import { history } from '../history/api';
+import { useI18n } from '../hooks/useI18n';
 import { Key } from './Key';
 import { Chip, ChipSegment } from './Chip';
 import { Panel } from './Panel';
@@ -107,6 +108,7 @@ function reducer(s: UiState, a: Action): UiState {
 }
 
 export function Programmer() {
+  const { t } = useI18n();
   const [radix, setRadix] = useState<Radix>(16);
   const [wordSize, setWordSize] = useState<WordSize>(64);
   const [state, dispatch] = useReducer(reducer, {
@@ -262,7 +264,7 @@ export function Programmer() {
       }}
       data-testid="programmer-mode"
     >
-      <ChipRow label="进制" testIdPrefix="prog-radix">
+      <ChipRow label={t('prog.radix')} testIdPrefix="prog-radix">
         {RADIXES.map((r) => (
           <Chip
             key={r.id}
@@ -277,7 +279,7 @@ export function Programmer() {
         ))}
       </ChipRow>
 
-      <ChipRow label="字宽" testIdPrefix="prog-word">
+      <ChipRow label={t('prog.wordSize')} testIdPrefix="prog-word">
         {WORD_SIZES.map((w) => (
           <Chip
             key={w.id}

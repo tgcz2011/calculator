@@ -21,13 +21,13 @@ const ARIA_OP: Record<string, string> = {
   '(': 'Open parenthesis', ')': 'Close parenthesis',
   '⌫': 'Backspace',
 };
-const TAB_LABELS = new Set(['Basic', 'Scientific', 'History', 'Programmer', 'Units', 'Date']);
+const TAB_LABELS = new Set(['基础', '科学', '历史', '程序员', '单位', '日期']);
 
-// ponytail: TabBar's t() output is locale-dependent. In zh the labels are
-// 基础/科学/历史/程序员/单位/日期. Tests default to zh (detectLocale's
-// fallback when navigator.language isn't zh-prefixed is 'en', but the test
-// runner's navigator may be either; we pin the mode selection via testId
-// and tab role to stay locale-agnostic.
+// ponytail: TabBar's t() output is locale-dependent. Tests pin 'lang-pref'='zh'
+// in clearAndSeedBasicSkip so the labels are stable: 基础/科学/历史/程序员/单位/日期.
+// Sub-tabs in Date / Units modes also use Chinese labels (Units categories are
+// hardcoded Chinese in src/units/engine.ts; Date sub-tabs go through t() so
+// the zh pin keeps them stable).
 
 async function tap(page: Page, label: string): Promise<void> {
   if (TAB_LABELS.has(label)) {
@@ -63,10 +63,19 @@ async function errorCode(page: Page): Promise<string | null> {
 // the home-screen calculator picker (TGC-20 item 2). We do the clear + seed
 // in a single evaluate so the App only has to navigate once — one fewer
 // full-page load per test, which matters on slow mobile viewports.
+//
+// Locale is pinned to 'zh' so the test expectations (which mix English
+// top-level tab labels with Chinese sub-tab / sync / currency strings) have
+// a single source of truth. detectLocale() falls back to navigator.language
+// when 'lang-pref' is unset, which differs between CI runners — pinning
+// removes that flakiness. H4 i18n fixes translated Date sub-tabs, SyncSettings
+// labels, and the currency snapshot, so we MUST pin to keep the Chinese
+// expectations in the tests below valid.
 async function clearAndSeedBasicSkip(page: Page): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem('calc:last-pick', 'basic');
+    localStorage.setItem('lang-pref', 'zh');
   });
 }
 
@@ -113,8 +122,10 @@ test.describe('Basic mode', () => {
   // shouldn't yell at the user mid-keystroke.
   test('partial expression shows no error until `=` is pressed (deferred UNCLOSED)', async ({ page }) => {
     await page.keyboard.type('1+');
-    // Result area stays blank — no UNCLOSED live yet.
-    await expect(readResult(page)).resolves.toBe('');
+    // Sticky-result UX: typing "1+" keeps the last good value "1" visible
+    // (deferred UNCLOSED is hidden until commit). The error code stays null
+    // because deferred codes don't surface live.
+    await expect(readResult(page)).resolves.toBe('1');
     await expect(errorCode(page)).resolves.toBeNull();
     await tap(page, '=');
     await expect.poll(() => errorCode(page)).toBe('UNCLOSED');
@@ -282,7 +293,7 @@ test.describe('Basic mode', () => {
 
 test.describe('Scientific mode', () => {
   test('sin(30) in DEG = 0.5', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     // sin / cos / tan / √ buttons insert their own open paren. Adding a
     // separate `(` produced `sin((30` -> PAREN error, not the expected 0.5.
     for (const k of ['sin', '3', '0', ')']) await tap(page, k);
@@ -290,32 +301,32 @@ test.describe('Scientific mode', () => {
   });
 
   test('cos(60) in DEG = 0.5', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     for (const k of ['cos', '6', '0', ')']) await tap(page, k);
     await expect(readResult(page)).resolves.toMatch(/^0\.5/);
   });
 
   test('tan(45) in DEG = 1', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     for (const k of ['tan', '4', '5', ')']) await tap(page, k);
     await expect(readResult(page)).resolves.toMatch(/^1/);
   });
 
   test('sqrt(16) = 4', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     // √ button inserts "√("; we still need to close it before = would matter.
     for (const k of ['√', '1', '6', ')']) await tap(page, k);
     await expect(readResult(page)).resolves.toBe('4');
   });
 
   test('factorial 5! = 120', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     await page.keyboard.type('5!');
     await expect(readResult(page)).resolves.toBe('120');
   });
 
   test('toggle DEG/RAD changes sin result', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     for (const k of ['sin', '3', '0', ')']) await tap(page, k);
     await expect(readResult(page)).resolves.toMatch(/^0\.5/);
     await tap(page, 'RAD');
@@ -323,7 +334,7 @@ test.describe('Scientific mode', () => {
   });
 
   test('π evaluates to ~3.14159', async ({ page }) => {
-    await tap(page, 'Scientific');
+    await tap(page, '科学');
     await tap(page, 'π');
     await expect(readResult(page)).resolves.toMatch(/^3\.14159/);
   });
@@ -333,7 +344,7 @@ test.describe('History tab', () => {
   test('records calculations and shows them', async ({ page }) => {
     for (const k of ['2', '+', '3', '=']) await tap(page, k);
     for (const k of ['4', '×', '5', '=']) await tap(page, k);
-    await tap(page, 'History');
+    await tap(page, '历史');
     // Strict locator: the tab name is "History" (case-sensitive); only the
     // HistoryList header span is uppercase "HISTORY".
     await expect(page.getByText('HISTORY', { exact: true })).toBeVisible();
@@ -343,9 +354,9 @@ test.describe('History tab', () => {
 
   test('clearing history empties the list', async ({ page }) => {
     for (const k of ['7', '+', '8', '=']) await tap(page, k);
-    await tap(page, 'History');
-    await page.getByRole('button', { name: 'Clear' }).click();
-    await expect(page.locator('text=No history yet')).toBeVisible();
+    await tap(page, '历史');
+    await page.getByRole('button', { name: '清空' }).click();
+    await expect(page.locator('text=还没有历史')).toBeVisible();
   });
 });
 
@@ -432,11 +443,11 @@ test.describe('Sync settings panel', () => {
 test.describe('Date / Time mode', () => {
   test('Date tab is the last tab in the order', async ({ page }) => {
     const tabs = page.getByRole('tab');
-    await expect(tabs.last()).toHaveText('Date');
+    await expect(tabs.last()).toHaveText('日期');
   });
 
   test('switching to Date hides Display and Keypad', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await expect(page.getByTestId('date-mode')).toBeVisible();
     await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
   });
@@ -444,21 +455,21 @@ test.describe('Date / Time mode', () => {
   test('diff sub-tab computes days between two dates', async ({ page }) => {
     // DateTime.tsx computes `days = (a - b) / 86400000` so +N when A > B.
     // Fill A as the later date for the expected "+14" sign.
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await page.getByTestId('date-a').fill('2025-01-15');
     await page.getByTestId('date-b').fill('2025-01-01');
     await expect(page.getByTestId('date-diff-days')).toHaveText('+14 天');
   });
 
   test('diff is negative when A is before B', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await page.getByTestId('date-a').fill('2025-01-01');
     await page.getByTestId('date-b').fill('2025-01-15');
     await expect(page.getByTestId('date-diff-days')).toHaveText('-14 天');
   });
 
   test('add/sub adds days to a base date', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await page.getByRole('tab', { name: '加减' }).click();
     await page.getByTestId('date-base').fill('2025-01-01');
     await page.getByTestId('date-offset').fill('30');
@@ -466,7 +477,7 @@ test.describe('Date / Time mode', () => {
   });
 
   test('add/sub with negative offset goes backward', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await page.getByRole('tab', { name: '加减' }).click();
     await page.getByTestId('date-base').fill('2025-03-01');
     await page.getByTestId('date-offset').fill('-15');
@@ -474,7 +485,7 @@ test.describe('Date / Time mode', () => {
   });
 
   test('weekday sub-tab shows the weekday name', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await page.getByRole('tab', { name: '星期' }).click();
     await page.getByTestId('date-weekday-input').fill('2025-01-01');
     await expect(page.getByTestId('date-weekday-zh')).toHaveText('星期三');
@@ -482,7 +493,7 @@ test.describe('Date / Time mode', () => {
   });
 
   test('today button fills current date', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Date' }).click();
+    await page.getByRole('tab', { name: '日期' }).click();
     await page.getByRole('tab', { name: '星期' }).click();
     const today = new Date().toISOString().slice(0, 10);
     await page.getByTestId('date-today').click();
@@ -493,42 +504,42 @@ test.describe('Date / Time mode', () => {
 test.describe('Units + Currency mode', () => {
   test('Units tab is before Date tab in the order', async ({ page }) => {
     const labels = await page.getByRole('tab').allTextContents();
-    const unitsIdx = labels.indexOf('Units');
-    const dateIdx = labels.indexOf('Date');
+    const unitsIdx = labels.indexOf('单位');
+    const dateIdx = labels.indexOf('日期');
     expect(unitsIdx).toBeGreaterThan(-1);
     expect(dateIdx).toBeGreaterThan(-1);
     expect(unitsIdx).toBeLessThan(dateIdx);
   });
 
   test('switching to Units hides Display and Keypad', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await expect(page.getByTestId('units-mode')).toBeVisible();
     await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('length conversion: 5 km = 5000 m', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await page.getByTestId('units-amount').fill('5');
     // convertUnits uses unitMath.format (no comma). Accept either form.
     await expect(page.getByTestId('units-result-value')).toContainText(/5,?000/);
   });
 
   test('mass conversion: 1 kg -> g = 1000', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await page.getByRole('tab', { name: '质量' }).click();
     await page.getByTestId('units-amount').fill('1');
     await expect(page.getByTestId('units-result-value')).toContainText(/1,?000/);
   });
 
   test('temperature conversion: 0 celsius -> 32 fahrenheit', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await page.getByRole('tab', { name: '温度' }).click();
     await page.getByTestId('units-amount').fill('0');
     await expect(page.getByTestId('units-result-value')).toContainText('32');
   });
 
   test('data conversion: 1 KiB -> 1024 byte', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await page.getByRole('tab', { name: '数据' }).click();
     await page.getByTestId('units-amount').fill('1');
     await page.getByTestId('units-from').selectOption('KiB');
@@ -537,7 +548,7 @@ test.describe('Units + Currency mode', () => {
   });
 
   test('swap button flips from/to', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await page.getByTestId('units-amount').fill('1');
     await expect(page.getByTestId('units-from')).toHaveValue('km');
     await expect(page.getByTestId('units-to')).toHaveValue('m');
@@ -547,7 +558,7 @@ test.describe('Units + Currency mode', () => {
   });
 
   test('currency shows snapshot stamp + USD/EUR conversion', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Units' }).click();
+    await page.getByRole('tab', { name: '单位' }).click();
     await page.getByRole('tab', { name: '货币' }).click();
     await expect(page.getByTestId('currency-snapshot')).toContainText('快照');
     await page.getByTestId('units-amount').fill('100');
@@ -563,23 +574,23 @@ test.describe('Programmer mode', () => {
   test('Programmer tab is the 4th tab in the locked order', async ({ page }) => {
     const labels = await page.getByRole('tab').allTextContents();
     // locked: Basic / Scientific / History / Programmer / Units / Date
-    expect(labels).toEqual(['Basic', 'Scientific', 'History', 'Programmer', 'Units', 'Date']);
+    expect(labels).toEqual(['基础', '科学', '历史', '程序员', '单位', '日期']);
   });
 
   test('switching to Programmer hides the basic Display + Keypad', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await expect(page.getByTestId('programmer-mode')).toBeVisible();
     await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('HEX is the default radix and QWORD is the default word size', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await expect(page.getByTestId('prog-radix-hex')).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByTestId('prog-word-64')).toHaveAttribute('aria-checked', 'true');
   });
 
   test('hex letters A-F appear only when HEX is selected', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await expect(page.getByTestId('prog-key-A')).toBeVisible();
     await page.getByTestId('prog-radix-dec').click();
     await expect(page.getByTestId('prog-key-A')).toHaveCount(0);
@@ -588,7 +599,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('non-allowed digits are disabled per radix (8/9 in BIN; A-F in DEC)', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     // HEX: all enabled
     await expect(page.getByTestId('prog-key-8')).toBeEnabled();
     await expect(page.getByTestId('prog-key-A')).toBeEnabled();
@@ -602,7 +613,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('FF + 1 = 100 in HEX QWORD', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-add').click();
@@ -613,7 +624,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('radix table shows HEX/DEC/OCT/BIN all simultaneously', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     // 0xFF = 255 dec = 0o377 = 0b11111111
@@ -624,7 +635,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('switching radix reformats the last token via toRadix', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await page.getByTestId('prog-key-1').click();
     await page.getByTestId('prog-key-0').click(); // "10" in HEX = 16 dec
     await page.getByTestId('prog-radix-dec').click();
@@ -633,7 +644,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('switching word size re-masks (QWORD vs BYTE)', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     // QWORD: FF as HEX
@@ -646,7 +657,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('bitwise AND: 0xF0 & 0x0F = 0', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-0').click();
     await page.getByTestId('prog-key-and').click();
@@ -658,7 +669,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('AC clears expression', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Programmer' }).click();
+    await page.getByRole('tab', { name: '程序员' }).click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-ac').click();
