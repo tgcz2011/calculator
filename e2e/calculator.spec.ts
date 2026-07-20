@@ -5,6 +5,11 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 // row tabs are role="tab", not role="button". The angle toggle in TabBar
 // has aria-label "Angle mode, currently DEG/RAD" with visible text "DEG/RAD".
 // One helper that knows about all three.
+//
+// TGC-20: the home-screen calculator picker (src/components/CalculatorPicker.tsx)
+// shows on first load. Tests skip it by seeding 'calc:last-pick' = 'basic'
+// in beforeEach. Tabs/modes/picker are kept independent of keypad, so this
+// helper still works whether the keypad is basic or scientific.
 const ARIA_OP: Record<string, string> = {
   '+': 'Add', '−': 'Subtract', '×': 'Multiply', '÷': 'Divide',
   '%': 'Percent', '±': 'Negate', '=': 'Equals',
@@ -14,8 +19,15 @@ const ARIA_OP: Record<string, string> = {
   π: 'Pi', ln: 'Natural log', log: 'Log base 10',
   '√': 'Square root', e: 'Euler number',
   '(': 'Open parenthesis', ')': 'Close parenthesis',
+  '⌫': 'Backspace',
 };
 const TAB_LABELS = new Set(['Basic', 'Scientific', 'History', 'Programmer', 'Units', 'Date']);
+
+// ponytail: TabBar's t() output is locale-dependent. In zh the labels are
+// 基础/科学/历史/程序员/单位/日期. Tests default to zh (detectLocale's
+// fallback when navigator.language isn't zh-prefixed is 'en', but the test
+// runner's navigator may be either; we pin the mode selection via testId
+// and tab role to stay locale-agnostic.
 
 async function tap(page: Page, label: string): Promise<void> {
   if (TAB_LABELS.has(label)) {
@@ -47,14 +59,24 @@ async function errorCode(page: Page): Promise<string | null> {
   return resultLocator(page).getAttribute('data-error-code');
 }
 
-test.beforeEach(async ({ page }) => {
-  // ponytail: goto before clear - localStorage.clear() on about:blank (opaque
-  // origin) throws SecurityError on Chromium 131+. Navigate to origin, clear,
-  // then navigate again so the app boots against empty storage.
-  await page.goto('/');
+// ponytail: seed the picker-skip pref so tests don't have to click through
+// the home-screen calculator picker (TGC-20 item 2). We do the clear + seed
+// in a single evaluate so the App only has to navigate once — one fewer
+// full-page load per test, which matters on slow mobile viewports.
+async function clearAndSeedBasicSkip(page: Page): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
+    localStorage.setItem('calc:last-pick', 'basic');
   });
+}
+
+test.beforeEach(async ({ page }) => {
+  // ponytail: goto before clear - localStorage.clear() on about:blank (opaque
+  // origin) throws SecurityError on Chromium 131+. Navigate to origin, clear
+  // + seed picker-skip in one shot, then navigate again so App boots against
+  // a fully primed localStorage.
+  await page.goto('/');
+  await clearAndSeedBasicSkip(page);
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 });
@@ -86,62 +108,90 @@ test.describe('Basic mode', () => {
     await expect(readResult(page)).resolves.toBe('Infinity');
   });
 
-  test('unmatched paren shows error message', async ({ page }) => {
-    // Basic mode keypad has no `(` button (only scientific does); type via
-    // keyboard. The keymap (src/App.tsx) inserts '(' for the keyboard key.
-    await page.keyboard.type('(1+2');
-    await expect(readResult(page)).resolves.toMatch(/括号|Error|error|表达式/);
+  // ponytail: TGC-20 item 1 — deferred codes (UNCLOSED / PAREN /
+  // MISSING_OPERAND) only surface after `=`. Typing partial expressions
+  // shouldn't yell at the user mid-keystroke.
+  test('partial expression shows no error until `=` is pressed (deferred UNCLOSED)', async ({ page }) => {
+    await page.keyboard.type('1+');
+    // Result area stays blank — no UNCLOSED live yet.
+    await expect(readResult(page)).resolves.toBe('');
+    await expect(errorCode(page)).resolves.toBeNull();
+    await tap(page, '=');
+    await expect.poll(() => errorCode(page)).toBe('UNCLOSED');
   });
 
-  test('unmatched paren emits errorCode=PAREN', async ({ page }) => {
+  test('partial paren shows no error until `=` is pressed (deferred PAREN)', async ({ page }) => {
     await page.keyboard.type('(1+2');
+    await expect(readResult(page)).resolves.toBe('');
+    await expect(errorCode(page)).resolves.toBeNull();
+    await tap(page, '=');
     await expect.poll(() => errorCode(page)).toBe('PAREN');
   });
 
-  test('incomplete trailing operator emits errorCode=UNCLOSED', async ({ page }) => {
+  test('unmatched paren emits errorCode=PAREN on commit', async ({ page }) => {
+    // TGC-20: basic keypad now has `(` and `)` buttons. Type via keypad to
+    // verify the new buttons wire through.
+    for (const k of ['(', '1', '+', '2']) await tap(page, k);
+    await expect(errorCode(page)).resolves.toBeNull();
+    await tap(page, '=');
+    await expect.poll(() => errorCode(page)).toBe('PAREN');
+  });
+
+  test('incomplete trailing operator emits errorCode=UNCLOSED on commit', async ({ page }) => {
     await page.keyboard.type('1+2*');
+    await expect(errorCode(page)).resolves.toBeNull();
+    await tap(page, '=');
     await expect.poll(() => errorCode(page)).toBe('UNCLOSED');
   });
 
-  test('trailing operator emits errorCode=UNCLOSED', async ({ page }) => {
+  test('trailing operator emits errorCode=UNCLOSED on commit', async ({ page }) => {
     // mathjs classifies "1+" as "Unexpected end of expression" -> UNCLOSED,
-    // not MISSING_OPERAND. Both code paths cover "incomplete expression";
-    // UNCLOSED is what the engine actually emits (src/engine/index.ts:123).
+    // not MISSING_OPERAND. With TGC-20 item 1, the live UNCLOSED is hidden;
+    // commit on `=` re-surfaces it.
     for (const k of ['1', '+']) await tap(page, k);
+    await expect(errorCode(page)).resolves.toBeNull();
+    await tap(page, '=');
     await expect.poll(() => errorCode(page)).toBe('UNCLOSED');
   });
 
-  test('unknown identifier emits errorCode=UNKNOWN_SYMBOL', async ({ page }) => {
-    // App.tsx keymap handles letters a-z + A-Z (since the UNKNOWN_SYMBOL /
-    // NOT_FUNCTION tests were written, letters were being dropped by the
-    // handler). foo + 1 -> mathjs "Undefined symbol foo" -> UNKNOWN_SYMBOL.
+  test('unknown identifier emits errorCode=UNKNOWN_SYMBOL (live, not deferred)', async ({ page }) => {
+    // UNKNOWN_SYMBOL is NOT in the deferred set — it surfaces as you type.
     await page.keyboard.type('foo+1');
     await expect.poll(() => errorCode(page)).toBe('UNKNOWN_SYMBOL');
   });
 
-  test('unknown function emits errorCode=NOT_FUNCTION', async ({ page }) => {
-    // 'x' is still mapped to '×' so "xyz(1)" becomes "×yz(1)"; mathjs
-    // throws "Undefined function ×yz" which the engine classifies as
-    // NOT_FUNCTION (src/engine/index.ts:127).
+  test('unknown function emits errorCode=NOT_FUNCTION (live, not deferred)', async ({ page }) => {
     await page.keyboard.type('xyz(1)');
     await expect.poll(() => errorCode(page)).toBe('NOT_FUNCTION');
   });
 
+  test('editing after a deferred error clears it', async ({ page }) => {
+    // Type partial → commit → error shows. Editing should clear it.
+    for (const k of ['1', '+']) await tap(page, k);
+    await tap(page, '=');
+    await expect.poll(() => errorCode(page)).toBe('UNCLOSED');
+    // Any edit (insert or backspace) invalidates the committed error.
+    await tap(page, '0');
+    await expect.poll(() => errorCode(page)).toBeNull();
+  });
+
   test('clearing expression clears the error code', async ({ page }) => {
     for (const k of ['1', '+']) await tap(page, k);
+    await tap(page, '=');
     await expect.poll(() => errorCode(page)).toBe('UNCLOSED');
     await tap(page, 'AC');
     await expect.poll(() => errorCode(page)).toBeNull();
   });
 
-  test('error state is also exposed via data-error attribute', async ({ page }) => {
+  test('error state is also exposed via data-error attribute (on commit)', async ({ page }) => {
     for (const k of ['1', '+']) await tap(page, k);
+    await tap(page, '=');
     await expect(resultLocator(page)).toHaveAttribute('data-error', 'true');
   });
 
-  test('each error code renders a distinct glyph', async ({ page }) => {
-    // UNCLOSED via `1+2×`: basic keypad has × but no `(`, so PAREN has to go
-    // through the keyboard handler.
+  test('each error code renders a distinct glyph on commit', async ({ page }) => {
+    // UNCLOSED via `1+2×`: basic keypad has × but the live UNCLOSED is
+    // hidden until `=`. PAREN goes through the keyboard handler.
     const cases: Array<[string[], string, string]> = [
       [['1', '+', '2', '×'], 'UNCLOSED', '\u2026'],
       [['1', '+'], 'UNCLOSED', '\u2026'],
@@ -149,26 +199,28 @@ test.describe('Basic mode', () => {
     for (const [keys, code, glyph] of cases) {
       await tap(page, 'AC');
       for (const k of keys) await tap(page, k);
+      await tap(page, '=');
       const glyphEl = page.locator(`[data-error-code="${code}"] .error-glyph`);
       await expect(glyphEl).toBeVisible();
       await expect(glyphEl).toHaveText(glyph);
     }
-    // PAREN: basic mode has no `(` button, type via keyboard.
+    // PAREN: type via keyboard, commit.
     await tap(page, 'AC');
     await page.keyboard.type('(1+2');
+    await tap(page, '=');
     const parenGlyph = page.locator('[data-error-code="PAREN"] .error-glyph');
     await expect(parenGlyph).toBeVisible();
     await expect(parenGlyph).toHaveText(')');
   });
 
-  test('unknown symbol error renders ? glyph', async ({ page }) => {
+  test('unknown symbol error renders ? glyph (live)', async ({ page }) => {
     await page.keyboard.type('foo+1');
     const glyphEl = page.locator('[data-error-code="UNKNOWN_SYMBOL"] .error-glyph');
     await expect(glyphEl).toBeVisible();
     await expect(glyphEl).toHaveText('?');
   });
 
-  test('not-function error renders ƒ glyph', async ({ page }) => {
+  test('not-function error renders ƒ glyph (live)', async ({ page }) => {
     await page.keyboard.type('xyz(1)');
     const glyphEl = page.locator('[data-error-code="NOT_FUNCTION"] .error-glyph');
     await expect(glyphEl).toBeVisible();
@@ -190,6 +242,41 @@ test.describe('Basic mode', () => {
     await page.keyboard.type('9*8');
     await page.keyboard.press('Enter');
     await expect(readResult(page)).resolves.toBe('72');
+  });
+
+  // ponytail: TGC-20 item 5 — backspace key on the basic keypad.
+  test('backspace key removes last character of expression', async ({ page }) => {
+    for (const k of ['1', '2', '3']) await tap(page, k);
+    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('123');
+    await tap(page, '⌫');
+    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('12');
+    await tap(page, '⌫');
+    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('1');
+  });
+
+  test('backspace on empty expression is a no-op', async ({ page }) => {
+    // ponytail: Display shows '0' as the placeholder when expression is empty
+    // (so the dark display area isn't visually blank). Backspace on an empty
+    // expression must keep that placeholder, not crash or insert anything.
+    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('0');
+    await tap(page, '⌫');
+    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('0');
+  });
+
+  // ponytail: TGC-20 item 4 — paren buttons on basic keypad.
+  test('basic keypad has open/close parenthesis buttons', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Open parenthesis' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close parenthesis' })).toBeVisible();
+  });
+
+  test('(1+2)*3 = 9 via keypad parens', async ({ page }) => {
+    for (const k of ['(', '1', '+', '2', ')', '×', '3', '=']) await tap(page, k);
+    await expect(readResult(page)).resolves.toBe('9');
+  });
+
+  test('(7-3)/2 = 2 via keypad parens', async ({ page }) => {
+    for (const k of ['(', '7', '−', '3', ')', '÷', '2', '=']) await tap(page, k);
+    await expect(readResult(page)).resolves.toBe('2');
   });
 });
 

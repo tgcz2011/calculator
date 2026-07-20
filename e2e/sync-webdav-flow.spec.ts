@@ -59,9 +59,13 @@ async function openSettingsAndConnect(page: Page, passphrase = 'correct-horse-ba
 
 test.beforeEach(async ({ page }) => {
   // ponytail: goto before clear - localStorage.clear() on about:blank (opaque
-  // origin) throws SecurityError on Chromium 131+.
+  // origin) throws SecurityError on Chromium 131+. After clearing, seed the
+  // TGC-20 picker-skip pref and reload so App boots directly to the calculator.
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem('calc:last-pick', 'basic');
+  });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 });

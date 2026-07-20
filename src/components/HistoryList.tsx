@@ -5,9 +5,10 @@ interface Props {
   bump: number;
   onRecall(expression: string, result: string): void;
   onClear(): void;
+  t(key: string): string;
 }
 
-export function HistoryList({ bump, onRecall, onClear }: Props) {
+export function HistoryList({ bump, onRecall, onClear, t }: Props) {
   const items = useMemo(() => {
     void bump;
     return history.list();
@@ -30,8 +31,8 @@ export function HistoryList({ bump, onRecall, onClear }: Props) {
         <div style={{ fontSize: 48, opacity: 0.5 }} aria-hidden>
           ⌛︎
         </div>
-        <div style={{ fontSize: 15 }}>No history yet</div>
-        <div style={{ fontSize: 13 }}>Calculations you run will appear here</div>
+        <div style={{ fontSize: 15 }}>{t('history.empty.title')}</div>
+        <div style={{ fontSize: 13 }}>{t('history.empty.desc')}</div>
       </div>
     );
   }
@@ -54,7 +55,7 @@ export function HistoryList({ bump, onRecall, onClear }: Props) {
           onClick={onClear}
           style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}
         >
-          Clear
+          {t('history.clear')}
         </button>
       </div>
       <ul

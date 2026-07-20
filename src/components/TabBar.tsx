@@ -8,11 +8,12 @@ interface Props {
   angle: AngleMode;
   onMode(m: Mode): void;
   onAngle(a: AngleMode): void;
+  t(key: string): string;
 }
 
 const MODES: Mode[] = ['basic', 'scientific', 'history', 'programmer', 'units', 'date'];
 
-export function TabBar({ mode, angle, onMode, onAngle }: Props) {
+export function TabBar({ mode, angle, onMode, onAngle, t }: Props) {
   return (
     <div
       style={{
@@ -27,7 +28,7 @@ export function TabBar({ mode, angle, onMode, onAngle }: Props) {
       <ChipSegment ariaLabel="Mode" layout="auto">
         {MODES.map((m) => (
           <Chip key={m} active={mode === m} onClick={() => onMode(m)}>
-            {labelFor(m)}
+            {t(`mode.${m}`)}
           </Chip>
         ))}
       </ChipSegment>
@@ -40,15 +41,4 @@ export function TabBar({ mode, angle, onMode, onAngle }: Props) {
       </Pill>
     </div>
   );
-}
-
-function labelFor(m: Mode): string {
-  switch (m) {
-    case 'basic': return 'Basic';
-    case 'scientific': return 'Scientific';
-    case 'history': return 'History';
-    case 'programmer': return 'Programmer';
-    case 'units': return 'Units';
-    case 'date': return 'Date';
-  }
 }

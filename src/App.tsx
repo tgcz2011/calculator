@@ -7,11 +7,13 @@ import { SyncSettings } from './components/SyncSettings';
 import { DateTime } from './components/DateTime';
 import { Units } from './components/Units';
 import { Programmer } from './components/Programmer';
+import { CalculatorPicker } from './components/CalculatorPicker';
 import { Pill } from './components/Panel';
-import { useCalculator } from './state/useCalculator';
+import { useCalculator, type Mode } from './state/useCalculator';
 import { useKeyboard } from './native/keyboard';
 import { useKeyboardExtras } from './hooks/useKeyboardExtras';
 import { useTheme } from './hooks/useTheme';
+import { useI18n } from './hooks/useI18n';
 import { isIOS, isDesktop, isMobileNative, isWeb } from './native/platform';
 
 // ponytail: width breakpoint -> shell width class. Three tiers:
@@ -42,14 +44,74 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
   return tier;
 }
 
+// ponytail: home-screen picker persistence (TGC-20 item 2). When the user
+// hasn't picked a calculator yet, the picker shows. Once they pick, we
+// stash the choice under 'calc:last-pick' so subsequent loads skip it.
+// Tests clear localStorage before navigating, then either re-set the
+// preference (skip picker) or let it clear (force picker).
+const LAST_PICK_KEY = 'calc:last-pick';
+
+function readLastPick(): Mode | null {
+  try {
+    const v = localStorage.getItem(LAST_PICK_KEY);
+    if (v === 'basic' || v === 'scientific' || v === 'history' ||
+        v === 'programmer' || v === 'units' || v === 'date') {
+      return v;
+    }
+  } catch {
+    // private mode
+  }
+  return null;
+}
+
+function writeLastPick(mode: Mode): void {
+  try {
+    localStorage.setItem(LAST_PICK_KEY, mode);
+  } catch {
+    // private mode
+  }
+}
+
 export default function App() {
   const calc = useCalculator();
   const tier = useShellWidth();
   const { theme, toggle: toggleTheme } = useTheme();
+  const i18n = useI18n();
+  const { t, locale, toggleLocale } = i18n;
   const [syncOpen, setSyncOpen] = useState(false);
+
+  // ponytail: picker visibility. We start by hydrating from localStorage on
+  // mount (avoids a flash of the picker when the user has already chosen).
+  // null = no decision yet (show picker), Mode = skip picker & go there.
+  const [pickedMode, setPickedMode] = useState<Mode | null>(() => readLastPick());
+
+  // If something else (sync, theme, etc.) changes the URL or storage, keep
+  // pickedMode in sync. Single source of truth: localStorage.
+  useEffect(() => {
+    if (pickedMode) writeLastPick(pickedMode);
+  }, [pickedMode]);
+
+  const onPick = useCallback((m: Mode) => {
+    writeLastPick(m);
+    setPickedMode(m);
+    calc.setMode(m);
+  }, [calc]);
+
+  const showPicker = pickedMode === null;
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
+      // ponytail: picker mode — any printable key picks Basic so the user can
+      // bypass the picker via keyboard if they want. Esc also picks Basic
+      // (cancel = "give me the default").
+      if (showPicker) {
+        if (e.key === 'Escape' || e.key === 'Enter' || /^[0-9+\-*/().]$/.test(e.key)) {
+          e.preventDefault();
+          onPick('basic');
+          return;
+        }
+        return;
+      }
       // Cmd/Ctrl-Z, Cmd-Shift-Z, Cmd-Y -> undo/redo (handled by reducer via dispatch would need
       // extra plumbing; skip at App level to avoid coupling).
       if (e.metaKey || e.ctrlKey) return;
@@ -96,7 +158,7 @@ export default function App() {
         calc.insert(insert);
       }
     },
-    [calc],
+    [calc, showPicker, onPick],
   );
 
   useKeyboard(handleKey);
@@ -114,6 +176,51 @@ export default function App() {
     document.head.appendChild(s);
     return () => s.remove();
   }, []);
+
+  if (showPicker) {
+    return (
+      <main
+        className="shell"
+        data-tier={tier}
+        data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-end',
+            gap: 'var(--s-2)',
+            padding: 'var(--s-3) var(--s-4)',
+          }}
+        >
+          <Pill
+            onClick={toggleLocale}
+            ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
+            testId="toggle-locale"
+          >
+            <span aria-hidden style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em' }}>
+              {locale === 'zh' ? 'EN' : '中'}
+            </span>
+          </Pill>
+          <Pill
+            onClick={toggleTheme}
+            ariaLabel={theme === 'light' ? t('common.theme.light') : t('common.theme.dark')}
+            testId="toggle-theme"
+          >
+            <span aria-hidden>{theme === 'light' ? '\u263D' : '\u2600'}</span>
+          </Pill>
+        </div>
+        <CalculatorPicker onPick={onPick} t={t} />
+      </main>
+    );
+  }
+
+  // ponytail: prefer committed errors (= press) over live errors so deferred
+  // codes (UNCLOSED / PAREN / MISSING_OPERAND) become visible after the user
+  // commits, while live errors (UNKNOWN_SYMBOL / NOT_FUNCTION / etc.) stay
+  // surfaced as the user types. Empty committed → fall back to live.
+  const displayError = calc.committedError || calc.liveError;
+  const displayErrorCode = calc.committedErrorCode || calc.liveErrorCode;
 
   return (
     <main
@@ -137,23 +244,33 @@ export default function App() {
             angle={calc.state.angle}
             onMode={calc.setMode}
             onAngle={calc.setAngle}
+            t={t}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--s-2)', padding: 'var(--s-3) var(--s-4) var(--s-3) 0' }}>
           <Pill
+            onClick={toggleLocale}
+            ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
+            testId="toggle-locale"
+          >
+            <span aria-hidden style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em' }}>
+              {locale === 'zh' ? 'EN' : '中'}
+            </span>
+          </Pill>
+          <Pill
             onClick={toggleTheme}
-            ariaLabel={`切换到${theme === 'light' ? '深色' : '浅色'}主题`}
+            ariaLabel={theme === 'light' ? t('common.theme.light') : t('common.theme.dark')}
             testId="toggle-theme"
           >
             <span aria-hidden>{theme === 'light' ? '\u263D' : '\u2600'}</span>
           </Pill>
           <Pill
             onClick={() => setSyncOpen(true)}
-            ariaLabel="同步设置"
+            ariaLabel={t('common.syncSettings')}
             testId="open-sync-settings"
           >
             <span aria-hidden style={{ fontSize: 16 }}>{'\u2699'}</span>
-            <span>同步</span>
+            <span>{t('common.sync')}</span>
           </Pill>
         </div>
       </div>
@@ -162,8 +279,9 @@ export default function App() {
           <Display
             expression={calc.state.expression}
             result={calc.live}
-            error={calc.liveError}
-            errorCode={calc.liveErrorCode}
+            error={displayError}
+            errorCode={displayErrorCode}
+            locale={locale}
             cursor={calc.state.cursor}
             onCursor={calc.setCursor}
             onBackspace={calc.backspace}
@@ -180,6 +298,7 @@ export default function App() {
           bump={calc.state.historyVersion}
           onRecall={calc.recall}
           onClear={calc.clearHistory}
+          t={t}
         />
       ) : calc.state.mode === 'date' ? (
         <DateTime />

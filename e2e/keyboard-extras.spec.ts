@@ -33,9 +33,13 @@ async function expressionText(page: Page): Promise<string> {
 }
 
 test.beforeEach(async ({ page }) => {
-  // No localStorage.clear() needed — none of these tests read history. Avoids
-  // the about:blank SecurityError the buggy calculator.spec.ts beforeEach hits;
-  // General's fix in that file is the canonical version.
+  // TGC-20: home-screen picker (src/components/CalculatorPicker.tsx) shows
+  // when 'calc:last-pick' isn't set. Seed it before goto so App skips the
+  // picker on first paint.
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('calc:last-pick', 'basic');
+  });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 });
