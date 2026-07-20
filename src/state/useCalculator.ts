@@ -4,6 +4,12 @@ import { history } from '../history/api';
 
 export type Mode = 'basic' | 'scientific' | 'history' | 'programmer' | 'units' | 'date';
 
+// ponytail: codes that mean "expression isn't finished yet" rather than
+// "expression is wrong". These are deferred — Display won't surface them
+// until the user commits with `=` — so live typing like "1+2*" or "(1+2"
+// doesn't yell at the user mid-keystroke.
+const DEFERRED_ERROR_CODES = new Set(['UNCLOSED', 'PAREN', 'MISSING_OPERAND']);
+
 interface Snapshot {
   expression: string;
   cursor: number;
@@ -13,6 +19,10 @@ interface State {
   expression: string;
   cursor: number;
   committed: string;
+  /** Last committed (= press) error message — engine's localized text. */
+  committedError: string;
+  /** Last committed (= press) error code — stable across locales. */
+  committedErrorCode: string;
   error: string;
   mode: Mode;
   angle: AngleMode;
@@ -26,7 +36,7 @@ type Action =
   | { kind: 'backspace' }
   | { kind: 'clear' }
   | { kind: 'allclear' }
-  | { kind: 'commit'; result: string }
+  | { kind: 'commit'; result: string; error: string; errorCode: string }
   | { kind: 'cursor'; pos: number }
   | { kind: 'mode'; mode: Mode }
   | { kind: 'angle'; mode: AngleMode }
@@ -47,6 +57,8 @@ function initial(): State {
     expression: '',
     cursor: 0,
     committed: '',
+    committedError: '',
+    committedErrorCode: '',
     error: '',
     mode: 'basic',
     angle: 'deg',
@@ -63,45 +75,86 @@ function reducer(s: State, a: Action): State {
       const after = s.expression.slice(s.cursor);
       const expr = before + a.text + after;
       const cursor = a.moveCursor === false ? s.cursor : s.cursor + a.text.length;
-      return { ...s, expression: expr, cursor, error: '', past: push(s, snapshotOf(s)), future: [] };
+      // ponytail: any keystroke invalidates a committed error (it was about
+      // the previous expression state). Both committed and live error slots
+      // reset so the Display goes back to the neutral state.
+      return {
+        ...s,
+        expression: expr,
+        cursor,
+        error: '',
+        committedError: '',
+        committedErrorCode: '',
+        past: push(s, snapshotOf(s)),
+        future: [],
+      };
     }
     case 'backspace': {
       if (s.cursor === 0) return s;
       const before = s.expression.slice(0, s.cursor - 1);
       const after = s.expression.slice(s.cursor);
-      return { ...s, expression: before + after, cursor: s.cursor - 1, past: push(s, snapshotOf(s)), future: [] };
+      return {
+        ...s,
+        expression: before + after,
+        cursor: s.cursor - 1,
+        error: '',
+        committedError: '',
+        committedErrorCode: '',
+        past: push(s, snapshotOf(s)),
+        future: [],
+      };
     }
     case 'clear': {
-      if (!s.expression && !s.committed) return s;
+      if (!s.expression && !s.committed && !s.committedError && !s.error) return s;
       return {
         ...s,
         expression: '',
         cursor: 0,
         error: '',
+        committedError: '',
+        committedErrorCode: '',
         past: push(s, snapshotOf(s)),
         future: [],
       };
     }
     case 'allclear': {
-      if (!s.expression && !s.committed && !s.error) return s;
+      if (!s.expression && !s.committed && !s.error && !s.committedError) return s;
       return {
         ...s,
         expression: '',
         cursor: 0,
         committed: '',
         error: '',
+        committedError: '',
+        committedErrorCode: '',
         past: push(s, snapshotOf(s)),
         future: [],
       };
     }
     case 'commit': {
-      if (!s.expression) return s;
+      if (!s.expression && !a.error) return s;
+      if (a.error) {
+        // ponytail: stash the committed error + code on the state so Display
+        // can render it after the user presses `=`. We deliberately do NOT
+        // mutate `expression` here — the user must see their input intact
+        // so they can fix the typo, not get their text overwritten.
+        return {
+          ...s,
+          committedError: a.error,
+          committedErrorCode: a.errorCode,
+          error: '',
+          past: push(s, snapshotOf(s)),
+          future: [],
+        };
+      }
       return {
         ...s,
         expression: a.result,
         cursor: a.result.length,
         committed: a.result,
         error: '',
+        committedError: '',
+        committedErrorCode: '',
         past: push(s, snapshotOf(s)),
         future: [],
       };
@@ -157,8 +210,14 @@ function normalize(raw: string): string {
 export interface Calculator {
   state: State;
   live: string;
+  /** Live error (deferred codes filtered out). UI should surface this live
+   *  as the user types — covers UNKNOWN_SYMBOL, NOT_FUNCTION, etc. */
   liveError: string;
   liveErrorCode: string;
+  /** Error captured at the last `=` press. Stays until the user edits.
+   *  This is where deferred codes (UNCLOSED/PAREN/MISSING_OPERAND) appear. */
+  committedError: string;
+  committedErrorCode: string;
   insert: (text: string) => void;
   backspace: () => void;
   clear: () => void;
@@ -183,13 +242,27 @@ export function useCalculator(): Calculator {
   const expr = state.expression;
   const normalized = useMemo(() => normalize(expr), [expr]);
   const live = useMemo(() => {
-    if (!normalized) return { value: '', error: '' };
-    return engine.evaluate(normalized, { angle: state.angle });
+    if (!normalized) return { value: '', error: '', errorCode: '' };
+    const r = engine.evaluate(normalized, { angle: state.angle });
+    return {
+      value: r.value,
+      error: r.error ?? '',
+      errorCode: r.errorCode ?? '',
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalized, state.angle, state.historyVersion]);
+  // ponytail: deferred codes (UNCLOSED / PAREN / MISSING_OPERAND) are filtered
+  // out of the *live* error slot so typing doesn't yell at the user. They
+  // resurface only when `equals()` evaluates and stashes them in committedError.
   const liveResult = live.value && !live.error ? live.value : '';
-  const liveError = live.error ?? '';
-  const liveErrorCode = live.errorCode ?? '';
+  const liveError =
+    live.error && live.errorCode && DEFERRED_ERROR_CODES.has(live.errorCode)
+      ? ''
+      : live.error;
+  const liveErrorCode =
+    live.error && live.errorCode && DEFERRED_ERROR_CODES.has(live.errorCode)
+      ? ''
+      : live.errorCode;
 
   const insert = useCallback((text: string) => dispatch({ kind: 'insert', text }), []);
   const backspace = useCallback(() => dispatch({ kind: 'backspace' }), []);
@@ -202,21 +275,31 @@ export function useCalculator(): Calculator {
   const redo = useCallback(() => dispatch({ kind: 'redo' }), []);
 
   const equals = useCallback(() => {
-    if (!normalized) return;
-    if (liveError) {
-      dispatch({ kind: 'commit', result: state.expression });
+    if (!normalized) {
+      // empty expression + press `=` → wipe any stale committed error so the
+      // display settles back to neutral.
+      dispatch({ kind: 'commit', result: '', error: '', errorCode: '' });
       return;
     }
-    history.record(state.expression, liveResult);
+    // ponytail: evaluate the normalized expression at commit time and stash
+    // whatever the engine returns. Deferred codes (UNCLOSED/PAREN/MISSING_OPERAND)
+    // become visible here for the first time; non-deferred codes (which were
+    // already shown live) just re-affirm.
+    const r = engine.evaluate(normalized, { angle: state.angle });
+    if (r.error) {
+      dispatch({ kind: 'commit', result: '', error: r.error ?? '', errorCode: r.errorCode ?? '' });
+      return;
+    }
+    history.record(state.expression, r.value);
     dispatch({ kind: 'history-bump' });
-    dispatch({ kind: 'commit', result: liveResult });
-  }, [normalized, liveError, liveResult, state.expression]);
+    dispatch({ kind: 'commit', result: r.value, error: '', errorCode: '' });
+  }, [normalized, state.angle, state.expression]);
 
   const recall = useCallback(
     (expression: string, result: string) => {
       dispatch({ kind: 'insert', text: expression });
       setTimeout(() => {
-        dispatch({ kind: 'commit', result });
+        dispatch({ kind: 'commit', result, error: '', errorCode: '' });
         dispatch({ kind: 'history-bump' });
       }, 0);
     },
@@ -233,6 +316,8 @@ export function useCalculator(): Calculator {
     live: liveResult,
     liveError,
     liveErrorCode,
+    committedError: state.committedError,
+    committedErrorCode: state.committedErrorCode,
     insert,
     backspace,
     clear,

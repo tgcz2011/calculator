@@ -5,6 +5,11 @@ import { test, expect } from '@playwright/test';
 // one job — theme only.
 
 test.beforeEach(async ({ page }) => {
+  // TGC-20: seed picker-skip pref so App boots straight to the calculator.
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('calc:last-pick', 'basic');
+  });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 });

@@ -1,4 +1,5 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useRef } from 'react';
+import { localizeErrorMessage, type Locale } from '../i18n';
 
 // ponytail: one Unicode glyph per error code, semantically chosen:
 //   UNCLOSED          - ellipsis (incomplete)
@@ -30,6 +31,7 @@ interface Props {
   error: string;
   errorCode?: string;
   cursor: number;
+  locale: Locale;
   onCursor(pos: number): void;
   onBackspace(): void;
   onClear(): void;
@@ -81,6 +83,14 @@ export function Display(props: Props) {
     }
   }
 
+  // ponytail: localize the error message based on the engine's stable code.
+  // Engine returns Chinese strings; for non-zh locales we rebuild from the
+  // code via i18n.localizeErrorMessage. Falls back to engine's text if the
+  // code is unknown to the i18n table.
+  const shownError = props.error
+    ? localizeErrorMessage(props.locale, props.errorCode, props.error)
+    : '';
+
   const glyphStyle: CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -116,7 +126,7 @@ export function Display(props: Props) {
 
   const resultStyle: CSSProperties = {
     fontSize: 'var(--display-fs)',
-    color: props.error ? 'var(--danger)' : 'var(--text)',
+    color: shownError ? 'var(--danger)' : 'var(--text)',
     fontWeight: 300,
     letterSpacing: '-0.03em',
     lineHeight: 1.05,
@@ -128,7 +138,7 @@ export function Display(props: Props) {
     wordBreak: 'break-all',
     flexShrink: 0,
     // ponytail: trim huge font on error so "Mismatched parentheses" doesn't overflow.
-    ...(props.error ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
+    ...(shownError ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
   };
 
   // ponytail: previous layout used `justify-content: flex-end` to push input + result
@@ -142,7 +152,7 @@ export function Display(props: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <input
         ref={ref}
-        value={props.expression || (props.error ? props.error : '0')}
+        value={props.expression || (shownError ? shownError : '0')}
         onSelect={onSelect}
         onClick={onSelect}
         onKeyDown={onKey}
@@ -158,10 +168,10 @@ export function Display(props: Props) {
       <div
         style={{ ...resultStyle, marginTop: 'auto' }}
         aria-live="polite"
-        data-error-code={props.error && props.errorCode ? props.errorCode : undefined}
-        data-error={props.error ? 'true' : undefined}
+        data-error-code={shownError && props.errorCode ? props.errorCode : undefined}
+        data-error={shownError ? 'true' : undefined}
       >
-        {props.error ? (
+        {shownError ? (
           <>
             {errorGlyph(props.errorCode) && (
               <span
@@ -173,7 +183,7 @@ export function Display(props: Props) {
                 {errorGlyph(props.errorCode)}
               </span>
             )}
-            <span className="error-message">{props.error}</span>
+            <span className="error-message">{shownError}</span>
           </>
         ) : (
           props.result || '\u00a0'

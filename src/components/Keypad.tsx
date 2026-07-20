@@ -24,6 +24,12 @@ interface FuncDef {
 }
 
 // 4 cols × 3 rows = 12, matching the main keypad width so the grid stays aligned.
+//
+// ponytail (TGC-20): `(` and `)` used to live in SCI_FUNCS too, but now the
+// basic-mode keypad (always rendered) owns the paren keys — so users in
+// scientific mode share the same paren keys instead of seeing two pairs.
+// We replaced the duplicates with `1/x` and `n!` so the 12-key grid stays
+// balanced.
 const SCI_FUNCS: FuncDef[] = [
   { label: 'sin', insert: 'sin(', aria: 'Sine' },
   { label: 'cos', insert: 'cos(', aria: 'Cosine' },
@@ -33,8 +39,8 @@ const SCI_FUNCS: FuncDef[] = [
   { label: 'log', insert: 'log10(', aria: 'Log base 10' },
   { label: '√', insert: '√(', aria: 'Square root' },
   { label: 'e', insert: 'e', aria: 'Euler number' },
-  { label: '(', insert: '(', aria: 'Open parenthesis' },
-  { label: ')', insert: ')', aria: 'Close parenthesis' },
+  { label: '1/x', insert: '^(-1)', aria: 'Reciprocal' },
+  { label: 'n!', insert: '!', aria: 'Factorial' },
   { label: 'x²', insert: '^2', aria: 'Square' },
   { label: 'xʸ', insert: '^', aria: 'Exponent' },
 ];
@@ -69,29 +75,43 @@ export function Keypad(props: Props) {
           </Row>
         </>
       )}
+      {/*
+        Layout (TGC-20):
+          Row 0: AC, (, ), ⌫          (clear / paren-pair / backspace)
+          Row 1: ±, %, ÷, ×           (negate, percent, divide, multiply)
+          Row 2: 7, 8, 9, −
+          Row 3: 4, 5, 6, +
+          Row 4: 1, 2, 3, (gap)       (gap = right margin, equals lives in row 5 to keep its standard spot)
+          Row 5: 0 (wide), ., =
+      */}
       <Row>
         <Key label="AC" variant="fn" onClick={props.onClear} onHold={props.onAllClear} ariaLabel="All clear" />
+        <Key label="(" variant="fn" onClick={() => props.onInsert('(')} ariaLabel="Open parenthesis" />
+        <Key label=")" variant="fn" onClick={() => props.onInsert(')')} ariaLabel="Close parenthesis" />
+        <Key label="⌫" variant="fn" onClick={props.onBackspace} ariaLabel="Backspace" />
+      </Row>
+      <Row>
         <Key label="±" variant="fn" onClick={() => props.onInsert('*(-1)')} ariaLabel="Negate" />
         <Key label="%" variant="fn" onClick={() => props.onInsert('/100')} ariaLabel="Percent" />
         <Key label="÷" variant="op" onClick={() => props.onInsert('÷')} ariaLabel="Divide" />
+        <Key label="×" variant="op" onClick={() => props.onInsert('×')} ariaLabel="Multiply" />
       </Row>
       <Row>
         <Key label="7" variant="num" onClick={() => props.onInsert('7')} />
         <Key label="8" variant="num" onClick={() => props.onInsert('8')} />
         <Key label="9" variant="num" onClick={() => props.onInsert('9')} />
-        <Key label="×" variant="op" onClick={() => props.onInsert('×')} ariaLabel="Multiply" />
+        <Key label="−" variant="op" onClick={() => props.onInsert('-')} ariaLabel="Subtract" />
       </Row>
       <Row>
         <Key label="4" variant="num" onClick={() => props.onInsert('4')} />
         <Key label="5" variant="num" onClick={() => props.onInsert('5')} />
         <Key label="6" variant="num" onClick={() => props.onInsert('6')} />
-        <Key label="−" variant="op" onClick={() => props.onInsert('-')} ariaLabel="Subtract" />
+        <Key label="+" variant="op" onClick={() => props.onInsert('+')} ariaLabel="Add" />
       </Row>
       <Row>
         <Key label="1" variant="num" onClick={() => props.onInsert('1')} />
         <Key label="2" variant="num" onClick={() => props.onInsert('2')} />
         <Key label="3" variant="num" onClick={() => props.onInsert('3')} />
-        <Key label="+" variant="op" onClick={() => props.onInsert('+')} ariaLabel="Add" />
       </Row>
       <Row>
         <Key label="0" variant="num" wide onClick={() => props.onInsert('0')} />

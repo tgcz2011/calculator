@@ -1,7 +1,7 @@
 {
   "name": "calculator",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Apple-style all-platform calculator (iOS/iPadOS/macOS/Web PWA + Android/Win/Linux)",
   "scripts": {
