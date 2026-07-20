@@ -72,6 +72,20 @@ function writeLastPick(mode: Mode): void {
   }
 }
 
+// ponytail (TGC-20 hotfix): the expression <input> in Display has its own
+// React onKeyDown that handles Backspace / Enter / Cmd-Z locally. When the
+// input is focused, the native keydown bubbles to this window-level listener
+// too, so a single Backspace press used to dispatch calc.backspace() twice
+// and delete two characters. The expression input owns those keys when it's
+// the focus target, so this guard skips our window-level handling and lets
+// Display do its thing.
+function isExpressionInputTarget(t: EventTarget | null): boolean {
+  return (
+    t instanceof HTMLInputElement &&
+    t.getAttribute('aria-label') === 'Expression'
+  );
+}
+
 export default function App() {
   const calc = useCalculator();
   const tier = useShellWidth();
@@ -112,20 +126,37 @@ export default function App() {
         }
         return;
       }
+      // ponytail (TGC-20 hotfix): when the expression input has focus, Display's
+      // own onKeyDown handles Enter / Backspace / Cmd+Z / Escape. Skip our
+      // window-level handling for those keys so we don't double-dispatch — the
+      // pre-fix behavior was one BS press deleting two chars because both
+      // handlers ran. Other keys (digits, ops, letters) still flow through
+      // here so typing-into-focused-input keeps working; the input is
+      // readOnly so insert() is the only mutation path for those keys.
+      // Skip is key-scoped, not target-scoped, so cursor-mid BS still falls
+      // through to this window handler (Display's local handler only fires
+      // when cursor === expression.length).
+      const inFocusedExprInput = isExpressionInputTarget(e.target);
       // Cmd/Ctrl-Z, Cmd-Shift-Z, Cmd-Y -> undo/redo (handled by reducer via dispatch would need
       // extra plumbing; skip at App level to avoid coupling).
       if (e.metaKey || e.ctrlKey) return;
       if (e.key === 'Enter' || e.key === '=') {
+        if (inFocusedExprInput) return; // Display's onKeyDown handles it.
         e.preventDefault();
         calc.equals();
         return;
       }
       if (e.key === 'Backspace') {
+        if (inFocusedExprInput && calc.state.cursor === calc.state.expression.length) {
+          // Display's local handler fires for cursor-at-end; let it own the dispatch.
+          return;
+        }
         e.preventDefault();
         calc.backspace();
         return;
       }
       if (e.key === 'Escape') {
+        if (inFocusedExprInput) return; // Display's onKeyDown handles it.
         e.preventDefault();
         if (calc.state.expression) calc.clear();
         else calc.allClear();
