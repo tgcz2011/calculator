@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { engine, type AngleMode } from '../engine';
 import { history } from '../history/api';
 
@@ -251,10 +251,30 @@ export function useCalculator(): Calculator {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalized, state.angle, state.historyVersion]);
+
+  // ponytail (UX): keep the last *successful* live result sticky while the user
+  // is mid-typing an expression. Old behavior: typing "5" showed "5" as the
+  // live result; pressing "+" made the expression "5+", which evaluates to a
+  // MISSING_OPERAND error, so the result vanished on the spot — felt
+  // discontinuous ("结果会突然消失"). New behavior: when the current live eval
+  // is a deferred error (UNCLOSED/PAREN/MISSING_OPERAND — i.e. "expression
+  // isn't finished yet, not wrong"), keep showing the last good value so the
+  // result stays coherent while the user types the next operand. Real errors
+  // (UNKNOWN_SYMBOL/NOT_FUNCTION) and committed errors still clear it.
+  const lastGoodLiveRef = useRef('');
+  useEffect(() => {
+    if (live.value && !live.error) lastGoodLiveRef.current = live.value;
+  }, [live.value, live.error]);
+
   // ponytail: deferred codes (UNCLOSED / PAREN / MISSING_OPERAND) are filtered
   // out of the *live* error slot so typing doesn't yell at the user. They
   // resurface only when `equals()` evaluates and stashes them in committedError.
-  const liveResult = live.value && !live.error ? live.value : '';
+  const liveResult =
+    live.value && !live.error
+      ? live.value
+      : live.error && live.errorCode && DEFERRED_ERROR_CODES.has(live.errorCode)
+        ? lastGoodLiveRef.current  // sticky: keep last good result while typing
+        : '';
   const liveError =
     live.error && live.errorCode && DEFERRED_ERROR_CODES.has(live.errorCode)
       ? ''

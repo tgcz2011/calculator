@@ -44,6 +44,25 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
   return tier;
 }
 
+// ponytail: scientific mode is cramped on a phone in portrait — the 6-col fn
+// grid + 6 main rows don't fit comfortably. Landscape gives the width the
+// scientific layout was designed for. Forcing orientation lock only works in
+// fullscreen PWA / native (screen.orientation.lock throws otherwise), so we
+// nudge with a dismissible hint instead. Clears automatically when rotated.
+function useIsPortrait(): boolean {
+  const [portrait, setPortrait] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(orientation: portrait)').matches;
+  });
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: portrait)');
+    const handler = () => setPortrait(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return portrait;
+}
+
 // ponytail: home-screen picker persistence (TGC-20 item 2). When the user
 // hasn't picked a calculator yet, the picker shows. Once they pick, we
 // stash the choice under 'calc:last-pick' so subsequent loads skip it.
@@ -89,6 +108,7 @@ function isExpressionInputTarget(t: EventTarget | null): boolean {
 export default function App() {
   const calc = useCalculator();
   const tier = useShellWidth();
+  const isPortrait = useIsPortrait();
   const { theme, toggle: toggleTheme } = useTheme();
   const i18n = useI18n();
   const { t, locale, toggleLocale } = i18n;
@@ -103,6 +123,20 @@ export default function App() {
   // pickedMode in sync. Single source of truth: localStorage.
   useEffect(() => {
     if (pickedMode) writeLastPick(pickedMode);
+  }, [pickedMode]);
+
+  // ponytail: restore the persisted mode on boot. readLastPick() hydrates
+  // pickedMode to skip the picker, but it never calls calc.setMode — so on
+  // reload the picker was skipped but the calculator stayed in 'basic' instead
+  // of the mode the user picked last time. onPick (the picker path) sets both,
+  // but the boot-hydration path only set pickedMode. This effect closes that
+  // gap: when pickedMode is non-null and the calc mode hasn't caught up, push
+  // it through setMode so the actual mode matches the persisted pick.
+  useEffect(() => {
+    if (pickedMode && calc.state.mode !== pickedMode) {
+      calc.setMode(pickedMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickedMode]);
 
   const onPick = useCallback((m: Mode) => {
@@ -305,6 +339,22 @@ export default function App() {
           </Pill>
         </div>
       </div>
+      {calc.state.mode === 'scientific' && tier === 'phone' && isPortrait && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: 'var(--s-1) var(--s-3)',
+            color: 'var(--text-tertiary)',
+            fontSize: 12,
+            background: 'var(--bg-elevated)',
+            borderRadius: 'var(--radius-sm)',
+            margin: '0 var(--s-3) var(--s-1)',
+          }}
+          data-testid="rotate-hint"
+        >
+          横屏体验更佳 · 旋转设备以展开科学函数键盘
+        </div>
+      )}
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <Display

@@ -108,13 +108,17 @@ function normalize(expr: string): string {
 function formatResult(v: unknown): string {
   if (typeof v === 'number') {
     if (!isFinite(v)) return v > 0 ? 'Infinity' : v < 0 ? '-Infinity' : 'NaN';
-    // ponytail: precision 14 strips float noise; regex removes trailing zeros in non-scientific results.
-    let s = math.format(v, { precision: 14 });
+    // ponytail: push exponential-notation thresholds out so everyday small/large
+    // numbers stay readable. mathjs's default flips to exponential around 1e-6 /
+    // 1e6, so 0.00001 rendered as 1e-5 — "too easy to trigger scientific notation".
+    // lowerExp: -9, upperExp: 16 keeps fixed notation for magnitudes in
+    // [1e-9, 1e16); only genuinely extreme values use exponential.
+    let s = math.format(v, { precision: 14, lowerExp: -9, upperExp: 16 });
     if (s.includes('.') && !s.includes('e')) s = s.replace(/\.?0+$/, '');
     return s;
   }
   // Complex, BigNumber, fraction, unit, matrix -> let mathjs format.
-  return math.format(v as any, { precision: 14 });
+  return math.format(v as any, { precision: 14, lowerExp: -9, upperExp: 16 });
 }
 
 // ponytail: error code classification so tests can match on stable codes, not message text.

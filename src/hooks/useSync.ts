@@ -6,8 +6,8 @@
 // panel (or page reload). On reconnect they retype. This is the same model
 // 1Password / Bitwarden use for the master password.
 
-import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { setSyncPush, history, type HistoryEntry } from '../history/api';
+import { useCallback, useEffect, useReducer } from 'react';
+import { setSyncPush, history } from '../history/api';
 import {
   createWebDavProvider,
   createSyncManager,
@@ -115,7 +115,6 @@ export interface UseSync {
 
 export function useSync(): UseSync {
   const [state, dispatch] = useReducer(reducer, undefined, initial);
-  const passwordRef = useRef<string>('');
 
   useEffect(() => {
     saveConfig(state.config);
@@ -133,11 +132,14 @@ export function useSync(): UseSync {
       };
       return createSyncManager(createWebDavProvider(webdav), {
         getLocal: () => history.list(),
-        setLocal: (entries: HistoryEntry[]) => {
-          // Clear + re-record to preserve the public sync API + LocalStorage path.
-          history.clear();
-          for (const e of entries.reverse()) history.record(e.expression, e.result);
-        },
+        // ponytail: replaceAll preserves each entry's id + timestamp. The old
+        // clear+record loop minted fresh ids/timestamps, which broke the
+        // id-based CRDT dedup in mergeHistories — every cross-device sync
+        // would union remote + local with no shared ids and double the set
+        // until capped at 500. It also reversed `entries` in place before the
+        // manager re-pushed it, so the wire payload's updatedAt became the
+        // oldest entry's timestamp instead of the high-water mark.
+        setLocal: (entries) => history.replaceAll(entries),
         passphrase,
       });
     }
@@ -160,7 +162,6 @@ export function useSync(): UseSync {
           return;
         }
         setSyncPush(() => mgr.schedulePush());
-        passwordRef.current = password;
         dispatch({
           kind: 'attach',
           manager: mgr,
@@ -185,7 +186,6 @@ export function useSync(): UseSync {
       }
     }
     setSyncPush(null);
-    passwordRef.current = '';
     dispatch({ kind: 'attach', manager: null, lastSync: 0, entries: 0 });
   }, [state.manager]);
 

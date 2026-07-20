@@ -58,7 +58,7 @@ jobs:
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'android'
     timeout-minutes: 20
     env:
-      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref || format('sha-{0}', github.sha) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -117,7 +117,7 @@ jobs:
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'ios'
     timeout-minutes: 30
     env:
-      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref || format('sha-{0}', github.sha) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -179,7 +179,7 @@ jobs:
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'macos'
     timeout-minutes: 40
     env:
-      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref || format('sha-{0}', github.sha) }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -247,7 +247,7 @@ jobs:
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'windows'
     timeout-minutes: 40
     env:
-      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref || format('sha-{0}', github.sha) }}
     steps:
       - uses: actions/checkout@v5
         with:

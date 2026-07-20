@@ -72,6 +72,33 @@ export class SqliteHistory implements HistoryAPI {
       .then(() => this.db.exec('DELETE FROM history'))
       .catch(() => {});
   }
+
+  replaceAll(entries: HistoryEntry[]): void {
+    // ponytail: bulk replace preserving each entry's id + timestamp. The sync
+    // merge path passes entries with stable ids from mergeHistories; re-running
+    // record() would mint fresh ids and break CRDT dedup. Cap + replace cache
+    // synchronously, then DELETE + bulk INSERT through the write chain so
+    // ordering is preserved relative to any in-flight writes.
+    const capped = entries.slice(0, MAX_ENTRIES);
+    this.cache = capped.slice();
+    this.writeChain = this.writeChain
+      .then(() => this.db.exec('DELETE FROM history'))
+      .then(() => {
+        // ponytail: one statement per row — both backends (Capacitor + Tauri)
+        // accept params; batching via multi-statement is backend-specific.
+        const work: Promise<void> = capped.reduce(
+          (acc, e) => acc.then(() => this.db.exec(
+            'INSERT INTO history (id, expression, result, ts) VALUES (?, ?, ?, ?)',
+            [e.id, e.expression, e.result, e.timestamp]
+          )),
+          Promise.resolve()
+        );
+        return work;
+      })
+      .catch(() => {
+        // best-effort: a failed bulk write doesn't corrupt the in-memory cache.
+      });
+  }
 }
 
 // ponytail: one Capacitor connection reused for app lifetime. @capacitor-community/sqlite

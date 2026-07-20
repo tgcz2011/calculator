@@ -11,6 +11,11 @@ export interface HistoryAPI {
   record(expression: string, result: string): HistoryEntry;
   list(): HistoryEntry[];
   clear(): void;
+  /** Replace the entire history with the given entries, preserving each entry's
+   *  existing id + timestamp. Used by the sync merge path — `record()` mints
+   *  fresh ids/timestamps, which would defeat the id-based CRDT dedup in
+   *  mergeHistories (sync would double the set on every cross-device run). */
+  replaceAll(entries: HistoryEntry[]): void;
 }
 
 // ponytail: optional sync push hook. When a SyncManager is registered (via
@@ -65,6 +70,14 @@ class LocalStorageHistory implements HistoryAPI {
   clear(): void {
     this.write([]);
   }
+  replaceAll(entries: HistoryEntry[]): void {
+    // ponytail: bulk overwrite, preserving each entry's id + timestamp. The
+    // sync merge path passes entries that already have stable ids from
+    // mergeHistories; re-recording them would mint fresh ids and break the
+    // id-based CRDT dedup (sync would double the set every cross-device run).
+    const capped = entries.slice(0, MAX_ENTRIES);
+    this.write(capped);
+  }
 }
 
 // ponytail: impl starts as LocalStorage (works everywhere, sync, immediate). On native,
@@ -100,7 +113,8 @@ export const history: HistoryAPI = {
   // without threading the hook into the SQLite class.
   record: (e, r) => { const x = impl.record(e, r); syncPush?.(); return x; },
   list: () => impl.list(),
-  clear: () => { impl.clear(); syncPush?.(); }
+  clear: () => { impl.clear(); syncPush?.(); },
+  replaceAll: (entries) => { impl.replaceAll(entries); syncPush?.(); }
 };
 
 // App boot awaits this before rendering so native SQLite cache is hydrated before first list().

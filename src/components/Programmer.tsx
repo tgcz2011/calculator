@@ -58,6 +58,17 @@ function fmtRadix(repr: RadixRepr, radix: Radix, wordSize: WordSize): string {
   }
 }
 
+/** Unpadded representation for a given radix — for writing into the editable
+ *  expression (padding belongs only in the result/radix table, not the input). */
+function radixRepField(repr: RadixRepr, radix: Radix): string {
+  switch (radix) {
+    case 16: return repr.hex;
+    case 10: return repr.dec;
+    case 8: return repr.oct;
+    case 2: return repr.bin;
+  }
+}
+
 function lastNumberToken(expr: string): string {
   // For radix switching: extract the most recent contiguous token of digits/letters
   // at the end of the expression so we can reformat via toRadix.
@@ -105,6 +116,10 @@ export function Programmer() {
     lastResultWord: 64,
   });
   const [error, setError] = useState<string>('');
+  // ponytail: thread the real engine errorCode through to Display's data-error-code
+  // so e2e + a11y can branch on INVALID_DIGIT/DIV_ZERO/SYNTAX/PAREN/MISSING_OPERAND.
+  // Old code hardcoded 'ENGINE' for every error, masking the real codes.
+  const [errorCode, setErrorCode] = useState<string>('');
 
   // Sync defaults to engine so anyone calling evaluate without options lands here.
   useEffect(() => {
@@ -119,32 +134,62 @@ export function Programmer() {
 
   function onInsert(text: string) {
     setError('');
+    setErrorCode('');
     dispatch({ kind: 'insert', text });
   }
 
   function onBackspace() {
     setError('');
+    setErrorCode('');
     dispatch({ kind: 'backspace' });
   }
 
   function onClear() {
     setError('');
+    setErrorCode('');
     dispatch({ kind: 'clear' });
   }
 
   function onAllClear() {
     setError('');
+    setErrorCode('');
     dispatch({ kind: 'allclear' });
+  }
+
+  function onNegate() {
+    // ponytail: ± toggles the sign of the current value. Old code inserted '~'
+    // (bitwise NOT) — same as the NOT key — so ± silently did NOT on every
+    // word size. The parser supports unary '-', so we re-evaluate the current
+    // expression wrapped in '-(...)' and replace the expr with the unpadded
+    // primary in the current radix. Empty expr -> insert '-' as a sign prefix.
+    setError('');
+    setErrorCode('');
+    if (!state.expr) {
+      dispatch({ kind: 'insert', text: '-' });
+      return;
+    }
+    const r = engine.evaluate(`-(${state.expr})`, { radix, wordSize });
+    if (r.error) {
+      setError(r.error);
+      setErrorCode(r.errorCode ?? '');
+      return;
+    }
+    // value is the primary in the input radix (signed dec for radix 10, else
+    // unsigned) — unpadded, exactly what the editable expr should hold.
+    dispatch({ kind: 'replace', expr: r.value });
   }
 
   function onEquals() {
     const r = engine.evaluate(state.expr, { radix, wordSize });
     if (r.error) {
       setError(r.error);
+      setErrorCode(r.errorCode ?? '');
       return;
     }
     if (r.radix) {
       history.record(state.expr, r.value);
+      setError('');
+      setErrorCode('');
       dispatch({ kind: 'commit', repr: r.radix });
     }
   }
@@ -162,14 +207,27 @@ export function Programmer() {
       if (token) {
         // ponytail: toRadix() takes a DECIMAL string. The token was typed in the
         // current radix, so convert it to dec first (e.g. "10" in HEX -> 16).
-        // Without this, "10" HEX would become 0xA when reformatted to DEC.
-        const dec = parseInt(token, radix);
-        if (Number.isFinite(dec)) {
-          const r = engine.toRadix(dec.toString(), wordSize);
-          const mapped = padByRadix(r, next, wordSize);
-          const newExpr = state.expr.slice(0, state.expr.length - token.length) + mapped;
-          dispatch({ kind: 'replace', expr: newExpr });
+        // Old code used parseInt(token, radix) which returns a Number and loses
+        // precision past 2^53 — a 16-hex-digit QWORD token like
+        // FFFFFFFFFFFFFFFF became an imprecise Number, and the reformatted expr
+        // was wrong. BigInt keeps QWORD-exact precision (matches the tokenizer,
+        // which parses via 0x/0o/0b prefixes + BigInt).
+        const prefix = RADIXES.find((r) => r.id === radix)?.prefix ?? '';
+        let dec: string;
+        try {
+          dec = BigInt(prefix + token.toLowerCase()).toString(10);
+        } catch {
+          return; // invalid token for the current radix — leave expr alone
         }
+        const r = engine.toRadix(dec, wordSize);
+        // ponytail: write the UNPADDED representation into the expression.
+        // Old code used padByRadix (zero-padded to wordSize/4 or wordSize),
+        // which dropped 16- or 64-char zero-padded strings into the editable
+        // expr (e.g. 000000000000000F). Padding belongs only in the result/
+        // radix table below, not the user-editable expression.
+        const mapped = radixRepField(r, next);
+        const newExpr = state.expr.slice(0, state.expr.length - token.length) + mapped;
+        dispatch({ kind: 'replace', expr: newExpr });
       }
     }
   }
@@ -239,6 +297,7 @@ export function Programmer() {
         wordSize={wordSize}
         liveRepr={liveRepr}
         liveValue={live?.value ?? ''}
+        errorCode={(error ? errorCode : '') || live?.errorCode || ''}
         error={error || liveError}
         expr={state.expr}
       />
@@ -289,7 +348,7 @@ export function Programmer() {
         </Row>
         <Row>
           <Key label="0" variant="num" size="compact" mono disabled={!allowedDigits.has('0')} onClick={() => onInsert('0')} testId="prog-key-0" />
-          <Key label="±" variant="fn" size="compact" onClick={() => onInsert('~')} testId="prog-key-neg" />
+          <Key label="±" variant="fn" size="compact" onClick={onNegate} testId="prog-key-neg" />
           <Key label="=" variant="op" size="compact" onClick={onEquals} testId="prog-key-eq" />
           <Key label="+" variant="op" size="compact" onClick={() => onInsert('+')} testId="prog-key-add" />
         </Row>
@@ -304,6 +363,7 @@ function Display({
   liveRepr,
   liveValue,
   error,
+  errorCode,
   expr,
 }: {
   radix: Radix;
@@ -311,6 +371,7 @@ function Display({
   liveRepr: RadixRepr | undefined;
   liveValue: string;
   error: string;
+  errorCode: string;
   expr: string;
 }) {
   const primary = liveRepr
@@ -346,7 +407,7 @@ function Display({
         data-testid="prog-primary"
         data-radix={radix}
         data-word-size={wordSize}
-        data-error-code={error ? 'ENGINE' : undefined}
+        data-error-code={error ? (errorCode || 'ENGINE') : undefined}
       >
         {error ? error : primary || '\u00a0'}
       </div>
@@ -416,8 +477,4 @@ function ChipRow({
 
 function Row({ children }: { children: ReactNode }) {
   return <div style={{ display: 'flex', gap: 4 }}>{children}</div>;
-}
-
-function padByRadix(repr: RadixRepr, radix: Radix, wordSize: WordSize): string {
-  return fmtRadix(repr, radix, wordSize);
 }

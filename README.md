@@ -7,27 +7,42 @@ Six platforms from one web bundle: iOS / iPadOS / Android (Capacitor), macOS / W
 
 ```
 src/
-  engine/index.ts       # math.js engine, canonical evaluate(expr) contract
+  engine/index.ts       # math.js engine — basic + scientific (canonical evaluate contract)
+  engine/programmer.ts  # BigInt programmer-mode evaluator (QWORD-exact)
   history/api.ts        # canonical history contract + platform picker (sync)
   history/sqlite.ts     # SQLite backend (Capacitor + Tauri), in-memory mirror
   native/platform.ts    # platform detection (web/ios/android/macos/...)
   native/keyboard.ts    # unified keyboard + Android back + lifecycle hooks
-  styles/tokens.css     # baseline design tokens (Minimax owns full system)
-  App.tsx               # minimal shell UI (Minimax's full UI supersedes this)
+  units/engine.ts       # units + currency conversion (math.js + local rates)
+  sync/                 # E2E-encrypted history sync (WebDAV + 坚果云; iCloud placeholder)
+  i18n/                 # zh / en locale bundles
+  state/useCalculator.ts # reducer + live/committed error model
+  hooks/                # useSync / useTheme / useI18n / useKeyboardExtras
+  components/           # UI: Keypad, Display, Programmer, Units, DateTime, SyncSettings, ...
+  styles/tokens.css     # design tokens (light/dark + system-pref fallback)
+  App.tsx               # shell UI + picker + keyboard routing
   main.tsx              # React bootstrap, awaits history hydration
 ```
 
 ## Locked contracts (do not change signatures)
 
-**Engine** (`src/engine/index.ts`):
+**Engine** (`src/engine/index.ts`) — basic/scientific + programmer mode:
 ```ts
 interface Engine {
-  evaluate(expr: string, options?: { angle: 'deg' | 'rad' }): { value: string; error?: string };
+  evaluate(expr: string, options?: {
+    angle?: 'deg' | 'rad';
+    radix?: 2 | 8 | 10 | 16;        // presence routes to the BigInt evaluator
+    wordSize?: 8 | 16 | 32 | 64;
+  }): { value: string; error?: string; errorCode?: string; radix?: RadixRepr };
   setAngleMode(mode: 'deg' | 'rad'): void;
   getAngleMode(): 'deg' | 'rad';
+  setProgrammer(state: Partial<ProgrammerState>): void;
+  getProgrammer(): ProgrammerState;
+  toRadix(decimal: string, wordSize?: 8 | 16 | 32 | 64): RadixRepr;
 }
 export const engine: Engine;
 ```
+`errorCode` (absent on success) is a stable code: `UNCLOSED / PAREN / MISSING_OPERAND / UNKNOWN_SYMBOL / NOT_FUNCTION / CONVERT / ENGINE` (basic/scientific) or `INVALID_DIGIT / DIV_ZERO / SYNTAX` (programmer). Programmer mode returns `radix` = all-radix reps (hex/dec/oct/bin, unpadded — UI pads to wordSize).
 
 **History** (`src/history/api.ts`):
 ```ts
@@ -36,6 +51,7 @@ interface HistoryAPI {
   record(expression: string, result: string): HistoryEntry;
   list(): HistoryEntry[];
   clear(): void;
+  replaceAll(entries: HistoryEntry[]): void;  // bulk replace preserving id+timestamp (sync merge)
 }
 export const history: HistoryAPI;
 export function initHistory(): Promise<void>;  // await at boot before render
