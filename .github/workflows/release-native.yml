@@ -36,6 +36,11 @@ on:
         options: ["all", "ios", "android", "macos", "windows"]
         default: "all"
 
+# GITHUB_TOKEN needs contents:write to upload assets to the release. The default
+# token on workflow_dispatch has read-only contents, which 403s the attach step.
+permissions:
+  contents: write
+
 concurrency:
   group: release-native-${{ github.ref }}
   cancel-in-progress: false
