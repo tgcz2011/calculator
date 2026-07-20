@@ -76,6 +76,15 @@ export function Display(props: Props) {
       else props.onUndo();
       return;
     }
+    // ponytail: Ctrl+Y is the Windows redo shortcut. useKeyboardExtras handles
+    // it globally but bails for any text-input target, so when the expression
+    // input is focused Ctrl+Y silently did nothing. Handle it here alongside
+    // Ctrl+Z / Ctrl+Shift+Z so redo works regardless of focus.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      props.onRedo();
+      return;
+    }
     if (e.key === 'Escape') {
       e.preventDefault();
       if (props.expression) props.onClear();

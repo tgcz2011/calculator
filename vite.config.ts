@@ -32,6 +32,17 @@ export default defineConfig({
   build: {
     target: 'es2020',
     outDir: 'dist',
-    sourcemap: false
+    sourcemap: false,
+    // ponytail: mathjs is ~860KB and dominates the main chunk. Split it into
+    // its own chunk so the app shell (React + UI) loads and hydrates before
+    // mathjs parses, and so Vite's 500KB chunk-size warning clears.
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          mathjs: ['mathjs'],
+        },
+      },
+    },
   }
 });

@@ -54,12 +54,10 @@ interface DiffParts {
 function diffParts(a: Date, b: Date): DiffParts {
   const days = diffDays(a, b);
   const weeks = Math.trunc(days / 7);
-  const remDays = days - weeks * 7;
   // Approximate months / years using 30.44-day average. Day-precision is what
   // users actually want; month/year display is illustrative only.
   const monthsApprox = Math.round((days / 30.44) * 10) / 10;
   const yearsApprox = Math.round((days / 365.25) * 10) / 10;
-  void remDays;
   return { days, weeks, monthsApprox, yearsApprox };
 }
 
@@ -214,7 +212,11 @@ function AddSubView({
   const date = parseIso(base);
   if (!date) return <ErrorBlock>请输入有效日期（YYYY-MM-DD）</ErrorBlock>;
   const result = valid ? addDays(date, offset) : null;
-  const weekday = WEEKDAYS_ZH[result ? result.getUTCDay() : date.getUTCDay()];
+  // ponytail: the note labels the *base* date string, so its weekday must be
+  // the base date's, not the result's. Old code used result.getUTCDay() when
+  // result existed, printing e.g. "注: 2025-01-01 (星期五)" even though
+  // 2025-01-01 is Wednesday (Friday was the result's day).
+  const baseWeekday = WEEKDAYS_ZH[date.getUTCDay()];
   return (
     <>
       <FieldRow label="基准日期">
@@ -255,7 +257,7 @@ function AddSubView({
       {!valid && (
         <ErrorBlock>天数必须是整数</ErrorBlock>
       )}
-      <div className="ui-result-secondary">{`注: ${base} (${weekday})`}</div>
+      <div className="ui-result-secondary">{`注: ${base} (${baseWeekday})`}</div>
     </>
   );
 }

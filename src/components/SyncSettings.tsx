@@ -55,10 +55,15 @@ export function SyncSettings({ open, onClose }: Props) {
     if (!password) return;
     if (passphrase.length < 8) return;
     if (passphrase !== confirmPassphrase) return;
+    // ponytail: capture status before the await; after, sync.status reflects the
+    // outcome. Only clear the entered credentials on success — a failed connect
+    // used to wipe the password + passphrase, forcing a full retype to retry.
     await sync.connect(password, passphrase);
-    setPassword('');
-    setPassphrase('');
-    setConfirmPassphrase('');
+    if (sync.status.kind === 'connected') {
+      setPassword('');
+      setPassphrase('');
+      setConfirmPassphrase('');
+    }
   }
 
   const preset = PRESETS[sync.config.provider];

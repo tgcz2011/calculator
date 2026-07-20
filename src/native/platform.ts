@@ -25,4 +25,6 @@ export const isAndroid = platform === 'android';
 export const isMobileNative = isIOS || isAndroid;
 export const isTauri = platform === 'macos' || platform === 'windows' || platform === 'linux';
 export const isCapacitor = isIOS || isAndroid;
-export const isDesktop = isTauri || (!isMobileNative && window.matchMedia?.('(min-width: 768px)').matches);
+export const isDesktop =
+  isTauri ||
+  (!isMobileNative && typeof window !== 'undefined' && !!window.matchMedia?.('(min-width: 768px)').matches);

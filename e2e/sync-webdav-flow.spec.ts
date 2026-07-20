@@ -85,9 +85,29 @@ test.describe('WebDAV sync flow', () => {
     await expect.poll(() => server.putCount(), { timeout: 6_000 }).toBeGreaterThanOrEqual(1);
     const body = server.lastPutBody();
     expect(body).toBeTruthy();
-    // E2E: blob is base64 ciphertext (salt[16]||iv[12]||ct). Must not be valid
-    // JSON and must not leak the payload kind marker in plaintext.
-    expect(body!).not.toMatch(/^\{.*\}$/s);
-    expect(body!).not.toContain('calc-history');
+    // E2E: blob is base64 of salt[16] || iv[12] || ciphertext (which includes
+    // the AES-GCM 16-byte auth tag). The old assertions (`not.toMatch(/^\{.*\}$/s)`
+    // and `not.toContain('calc-history')`) were trivially true for any base64
+    // string — base64 contains no '{'/'}' and never the substring 'calc-history'.
+    // Decode in the browser and assert real ciphertext structure + that the
+    // bytes don't decode to plaintext JSON containing the payload markers.
+    const check = await page.evaluate((b) => {
+      try {
+        const bin = atob(b as string);
+        const len = bin.length;
+        if (len < 16 + 12 + 16) return { ok: false, reason: `blob too short (${len} bytes)` };
+        // Try to read the decoded bytes as UTF-8. Ciphertext is random bytes,
+        // so this almost certainly throws or yields garbage — but the real
+        // guarantee is that it must not contain the plaintext payload markers.
+        let asText = '';
+        try { asText = decodeURIComponent(escape(bin)); } catch { /* random bytes — expected */ }
+        if (asText.includes('"kind":"calc-history"')) return { ok: false, reason: 'plaintext payload marker leaked' };
+        if (asText.includes('"expression"')) return { ok: false, reason: 'plaintext history field leaked' };
+        return { ok: true, len };
+      } catch (e) {
+        return { ok: false, reason: String(e) };
+      }
+    }, body);
+    expect(check.ok).toBe(true);
   });
 });

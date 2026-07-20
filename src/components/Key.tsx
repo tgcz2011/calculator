@@ -29,6 +29,9 @@ export interface KeyProps {
   testId?: string;
   /** Size override: 'default' uses --key-size; 'compact' is smaller (programmer mode). */
   size?: 'default' | 'compact';
+  /** Extra style overrides merged on top of the internal style (last-wins). Lets
+   *  callers place a key in a CSS grid with row/column spans without forking Key. */
+  style?: CSSProperties;
 }
 
 export function Key({
@@ -43,6 +46,7 @@ export function Key({
   ariaLabel,
   testId,
   size = 'default',
+  style: extraStyle,
 }: KeyProps) {
   const compact = size === 'compact';
   const palette = paletteFor(variant);
@@ -69,6 +73,7 @@ export function Key({
     paddingLeft: wide ? 'calc(var(--key-size) * 0.32)' : 0,
     opacity: disabled ? 0.35 : 1,
     pointerEvents: disabled ? 'none' : 'auto',
+    ...(extraStyle ?? {}),
   };
   return (
     <button

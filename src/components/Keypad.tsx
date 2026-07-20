@@ -51,29 +51,40 @@ export function Keypad(props: Props) {
       style={{
         '--key-size': 'clamp(56px, 13vw, 76px)',
         padding: 'var(--s-2) var(--s-3)',
+        // ponytail: scientific mode adds 2 rows of function keys on top of the
+        // 6 main rows. On a phone (esp. portrait) that pushed the keypad tall
+        // enough to squeeze the display area, and the result overlapped the
+        // top row of buttons. Let the keypad scroll instead of overflowing
+        // into the display — the display keeps its flex space, the keypad
+        // shrinks and scrolls internally if it doesn't fit.
+        overflow: 'auto',
+        flexShrink: 1,
       } as React.CSSProperties}
     >
       {props.scientific && (
-        <>
-          <Row>
-            <Key label={SCI_FUNCS[0].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[0].insert)} ariaLabel={SCI_FUNCS[0].aria} />
-            <Key label={SCI_FUNCS[1].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[1].insert)} ariaLabel={SCI_FUNCS[1].aria} />
-            <Key label={SCI_FUNCS[2].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[2].insert)} ariaLabel={SCI_FUNCS[2].aria} />
-            <Key label={SCI_FUNCS[3].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[3].insert)} ariaLabel={SCI_FUNCS[3].aria} />
-          </Row>
-          <Row>
-            <Key label={SCI_FUNCS[4].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[4].insert)} ariaLabel={SCI_FUNCS[4].aria} />
-            <Key label={SCI_FUNCS[5].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[5].insert)} ariaLabel={SCI_FUNCS[5].aria} />
-            <Key label={SCI_FUNCS[6].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[6].insert)} ariaLabel={SCI_FUNCS[6].aria} />
-            <Key label={SCI_FUNCS[7].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[7].insert)} ariaLabel={SCI_FUNCS[7].aria} />
-          </Row>
-          <Row>
-            <Key label={SCI_FUNCS[8].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[8].insert)} ariaLabel={SCI_FUNCS[8].aria} />
-            <Key label={SCI_FUNCS[9].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[9].insert)} ariaLabel={SCI_FUNCS[9].aria} />
-            <Key label={SCI_FUNCS[10].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[10].insert)} ariaLabel={SCI_FUNCS[10].aria} />
-            <Key label={SCI_FUNCS[11].label} variant="fn" onClick={() => props.onInsert(SCI_FUNCS[11].insert)} ariaLabel={SCI_FUNCS[11].aria} />
-          </Row>
-        </>
+        <div
+          style={{
+            // ponytail: 6 cols × 2 rows for the 12 scientific functions — denser
+            // than the old 4×3 grid of full-size keys, so the scientific keypad
+            // is one row shorter and benefits from landscape width. Compact
+            // key size keeps each button readable without dominating the layout.
+            display: 'grid',
+            gridTemplateColumns: 'repeat(6, 1fr)',
+            gap: 0,
+            marginBottom: 'var(--s-1)',
+          }}
+        >
+          {SCI_FUNCS.map((fn) => (
+            <Key
+              key={fn.label}
+              label={fn.label}
+              variant="fn"
+              size="compact"
+              onClick={() => props.onInsert(fn.insert)}
+              ariaLabel={fn.aria}
+            />
+          ))}
+        </div>
       )}
       {/*
         Layout (TGC-20):
@@ -108,16 +119,36 @@ export function Keypad(props: Props) {
         <Key label="6" variant="num" onClick={() => props.onInsert('6')} />
         <Key label="+" variant="op" onClick={() => props.onInsert('+')} ariaLabel="Add" />
       </Row>
-      <Row>
-        <Key label="1" variant="num" onClick={() => props.onInsert('1')} />
-        <Key label="2" variant="num" onClick={() => props.onInsert('2')} />
-        <Key label="3" variant="num" onClick={() => props.onInsert('3')} />
-      </Row>
-      <Row>
-        <Key label="0" variant="num" wide onClick={() => props.onInsert('0')} />
-        <Key label="." variant="num" onClick={() => props.onInsert('.')} />
-        <Key label="=" variant="op" onClick={props.onEquals} ariaLabel="Equals" />
-      </Row>
+      {/*
+        Bottom two rows are a 4×2 CSS grid (not two flex Rows) so the = key
+        spans both rows in column 4 (Apple-style tall equals). Previously the
+        "1 2 3" row had only 3 keys stretched across 4 columns, so each digit
+        was 1/3-width and "3" visually landed in the operator column (under
+        − and +). With the grid, 1/2/3 each occupy column 1/2/3 so "3" lines
+        up under 6 and 9, and the tall = fills column 4 for both rows. The 0
+        key spans columns 1-2 of the second row (wide "0"). */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateRows: 'repeat(2, var(--key-size))',
+          gap: 0,
+        }}
+      >
+        <Key label="1" variant="num" onClick={() => props.onInsert('1')} style={{ gridColumn: '1', gridRow: '1' }} />
+        <Key label="2" variant="num" onClick={() => props.onInsert('2')} style={{ gridColumn: '2', gridRow: '1' }} />
+        <Key label="3" variant="num" onClick={() => props.onInsert('3')} style={{ gridColumn: '3', gridRow: '1' }} />
+        <Key
+          label="="
+          variant="op"
+          onClick={props.onEquals}
+          ariaLabel="Equals"
+          testId="key-equals"
+          style={{ gridColumn: '4', gridRow: '1 / 3', height: 'auto', minHeight: 'auto' }}
+        />
+        <Key label="0" variant="num" onClick={() => props.onInsert('0')} style={{ gridColumn: '1 / 3', gridRow: '2', justifyContent: 'flex-start', paddingLeft: 'calc(var(--key-size) * 0.32)' }} />
+        <Key label="." variant="num" onClick={() => props.onInsert('.')} style={{ gridColumn: '3', gridRow: '2' }} />
+      </div>
     </div>
   );
 }
