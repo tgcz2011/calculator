@@ -345,9 +345,11 @@ test.describe('History tab', () => {
     for (const k of ['2', '+', '3', '=']) await tap(page, k);
     for (const k of ['4', '×', '5', '=']) await tap(page, k);
     await tap(page, '历史');
-    // Strict locator: the tab name is "History" (case-sensitive); only the
-    // HistoryList header span is uppercase "HISTORY".
-    await expect(page.getByText('HISTORY', { exact: true })).toBeVisible();
+    // ponytail (L6): HistoryList header is now i18n'd via t('mode.history').
+    // Use testId (locale-independent) to disambiguate from the History tab
+    // label, which is also '历史' in zh locale.
+    await expect(page.getByTestId('history-section-title')).toBeVisible();
+    await expect(page.getByTestId('history-section-title')).toHaveText('历史');
     const items = page.locator("button:has(span:text('= '))");
     await expect(items).toHaveCount(2);
   });

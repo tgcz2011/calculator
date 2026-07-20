@@ -11,6 +11,18 @@ export type Theme = 'light' | 'dark';
 
 const STORAGE_KEY = 'theme-pref';
 
+// ponytail: PWA theme-color meta tag id (set in index.html) + the two --bg token
+// values from tokens.css. Keeping them here as constants so the meta tag stays in
+// sync with the actual surface color the user sees.
+const THEME_COLOR_META_ID = 'theme-color-meta';
+const LIGHT_BG = '#f2f2f7';
+const DARK_BG = '#000000';
+
+function setThemeColorMeta(theme: Theme): void {
+  const m = document.getElementById(THEME_COLOR_META_ID);
+  if (m) m.setAttribute('content', theme === 'light' ? LIGHT_BG : DARK_BG);
+}
+
 function readStored(): Theme | null {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
@@ -47,7 +59,11 @@ export function useTheme(): UseThemeResult {
   useEffect(() => {
     if (readStored() !== null) return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = () => setTheme(mq.matches ? 'dark' : 'light');
+    const onChange = () => {
+      const next: Theme = mq.matches ? 'dark' : 'light';
+      setTheme(next);
+      setThemeColorMeta(next);
+    };
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
   }, []);
@@ -56,6 +72,7 @@ export function useTheme(): UseThemeResult {
     setTheme((prev) => {
       const next: Theme = prev === 'light' ? 'dark' : 'light';
       document.documentElement.setAttribute('data-theme', next);
+      setThemeColorMeta(next);
       try {
         localStorage.setItem(STORAGE_KEY, next);
       } catch {

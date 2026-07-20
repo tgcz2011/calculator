@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#000000" id="theme-color-meta" />
     <title>Calculator</title>
   </head>
   <body>
@@ -14,14 +14,30 @@
       // Reads localStorage 'theme-pref' set by src/hooks/useTheme.ts; if absent,
       // leaves <html> alone and lets tokens.css @media (prefers-color-scheme: dark)
       // pick the initial colors. No deps, no React, runs synchronously.
+      // Also syncs the <meta name="theme-color"> tag so the PWA splash / status
+      // bar matches the active theme on first paint (before React mounts).
       (function () {
+        var LIGHT = '#f2f2f7';
+        var DARK = '#000000';
+        function setMeta(color) {
+          var m = document.getElementById('theme-color-meta');
+          if (m) m.setAttribute('content', color);
+        }
         try {
           var t = localStorage.getItem('theme-pref');
           if (t === 'light' || t === 'dark') {
             document.documentElement.setAttribute('data-theme', t);
+            setMeta(t === 'light' ? LIGHT : DARK);
+          } else {
+            // No explicit pref: follow system preference so the meta tag matches
+            // whatever tokens.css @media picks.
+            var dark = window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches;
+            setMeta(dark ? DARK : LIGHT);
           }
         } catch (e) {
-          // localStorage may throw (e.g. about:blank in tests); no-op.
+          // localStorage / matchMedia may throw (e.g. about:blank in tests); leave
+          // the meta tag at its dark default (#000000) — matches the manifest.
         }
       })();
     </script>

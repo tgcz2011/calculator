@@ -8,6 +8,8 @@
 - `npm run smoke` - contract smoke test (engine + history, no framework, tsx)
 - `npm run build` - tsc + vite build -> dist/
 - `npm run preview` - serve built dist/
+- `npm run e2e` - Playwright e2e (4 device projects: iPhone 13, Pixel 7, iPad gen 7, Desktop Chrome)
+- `npm run e2e:install` - one-time Playwright browser install (required before first `npm run e2e`)
 
 ## Native build
 
@@ -29,6 +31,19 @@
 
 Minimax-M3 owns UI (`src/App.tsx`, `src/components/`, `src/styles/`).
 General owns scaffold + engine + history backends + native + build pipeline.
+
+## UX / i18n / theme conventions
+
+See [UX-GUIDELINES.md](./UX-GUIDELINES.md) for the canonical reference on:
+- Design tokens (color / spacing / radius / motion)
+- Display vs. keypad contrast (Apple aesthetic)
+- Touch target sizing (44px minimum, compact keys 48-60px)
+- Long-press pointer-event pattern (no `onDoubleClick`)
+- Sticky last-good live result + deferred error semantics
+- i18n rules (all visible text + aria-labels go through `t()`)
+- Theme switching + `<meta name="theme-color">` sync for PWA splash
+- Compositing-layer gotcha (avoid `opacity < 1` over interactive elements)
+- Locale-aware e2e selectors (`getByTestId` preferred; `getByRole` needs zh name)
 
 ## Tauri Rust check
 

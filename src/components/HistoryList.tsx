@@ -47,8 +47,11 @@ export function HistoryList({ bump, onRecall, onClear, t }: Props) {
           padding: 'var(--s-2) var(--s-4)',
         }}
       >
-        <span style={{ fontSize: 13, color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.04em' }}>
-          HISTORY
+        <span
+          data-testid="history-section-title"
+          style={{ fontSize: 13, color: 'var(--text-tertiary)', fontWeight: 600, letterSpacing: '0.04em' }}
+        >
+          {t('mode.history').toUpperCase()}
         </span>
         <button
           type="button"

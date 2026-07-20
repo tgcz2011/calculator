@@ -77,10 +77,10 @@ export function SyncSettings({ open, onClose }: Props) {
     (sync.config.provider === 'icloud' || !!sync.config.endpoint);
 
   return (
-    <Modal open={open} onClose={onClose} ariaLabel="同步设置" testId="sync-settings">
+    <Modal open={open} onClose={onClose} ariaLabel={t('common.syncSettings')} testId="sync-settings">
       <div style={headerStyle}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>{t('sync.title')}</h2>
-        <Pill onClick={onClose} ariaLabel="关闭">
+        <Pill onClick={onClose} ariaLabel={t('common.close')}>
           {'\u2715'}
         </Pill>
       </div>
@@ -91,7 +91,7 @@ export function SyncSettings({ open, onClose }: Props) {
 
         {/* Provider selection */}
         <Section title={t('sync.section.service')}>
-          <div role="radiogroup" aria-label="Provider" style={radioGroupStyle}>
+          <div role="radiogroup" aria-label={t('sync.section.service')} style={radioGroupStyle}>
             {(Object.keys(PROVIDER_LABELS) as ProviderId[]).map((id) => (
               <label key={id} style={radioLabelStyle}>
                 <input
