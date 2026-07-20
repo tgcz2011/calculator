@@ -1,20 +1,23 @@
 name: release-native
 
-# Auto-builds native artifacts (Android APK, iOS simulator .app, macOS Tauri)
-# and attaches them to the GitHub release whenever a version tag is pushed.
-# Triggered by `./scripts/release.sh` pushing `v<version>`. The web zip is
-# attached by release.sh itself; this workflow appends the native shells.
+# Auto-builds native artifacts (Android APK, iOS simulator .app, macOS + Windows
+# Tauri) and attaches them to the GitHub release whenever a version tag is
+# pushed. Triggered by `./scripts/release.sh` pushing `v<version>`. The web zip
+# is attached by release.sh itself; this workflow appends the native shells.
 #
 # Also dispatchable (`workflow_dispatch`) with a `ref` input to retroactively
-# build artifacts for an existing tag (e.g. backfilling a release), and a
-# `platforms` input to build only a subset.
+# build + attach artifacts for an existing tag (e.g. backfilling v0.3.0), and a
+# `platforms` input to build only a subset. When `ref` is a tag like `v0.3.0`,
+# each job attaches its artifact to that tag's release.
 #
 # ponytail: tag-push trigger (not just workflow_dispatch) so release.sh needs
 # zero changes - push the tag, native artifacts follow automatically. All
 # builds are debug/unsigned:
-#   - iOS: simulator-only .app (device .ipa needs signing certs - ask owner)
+#   - iOS/iPadOS: simulator-only .app (device .ipa needs signing certs - ask owner)
 #   - Android: debug APK (self-signed debug keystore, sideloadable)
-#   - macOS: Tauri unsigned .dmg (needs Developer ID + notarization for distribution)
+#   - macOS: Tauri unsigned .dmg + .app (needs Developer ID + notarization for distribution)
+#   - Windows: Tauri unsigned .exe + .msi (needs code-signing cert for distribution)
+# iPadOS shares the iOS .app (same build) - no separate job.
 # Call out the signing status in release notes.
 
 on:
@@ -24,18 +27,23 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag or ref to build (defaults to current ref)"
+        description: "Tag or ref to build (e.g. v0.3.0 to backfill that release)"
         required: false
         default: ""
       platforms:
         description: "Platforms to build"
         type: choice
-        options: ["all", "ios", "android", "macos"]
+        options: ["all", "ios", "android", "macos", "windows"]
         default: "all"
 
 concurrency:
   group: release-native-${{ github.ref }}
   cancel-in-progress: false
+
+# TAG = the release tag we attach artifacts to. On a tag push it's the pushed
+# tag; on a workflow_dispatch backfill it's inputs.ref (when tag-like). Each job
+# inherits this so rename + attach steps stay in sync without re-deriving it.
+# ATTACH fires on tag push OR a workflow_dispatch whose ref is a tag (v*).
 
 jobs:
   android:
@@ -44,6 +52,8 @@ jobs:
     if: >-
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'android'
     timeout-minutes: 20
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -67,7 +77,6 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
       - name: Rename APK to include tag
         run: |
-          TAG="${GITHUB_REF##*/}"
           cp android/app/build/outputs/apk/debug/app-debug.apk "calculator-${TAG}-android-debug.apk"
       - name: Upload artifact (always, for backfill downloads)
         uses: actions/upload-artifact@v7
@@ -76,14 +85,16 @@ jobs:
           path: calculator-*-android-debug.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Attach APK to release (tag pushes only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Attach APK to release
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          (github.event_name == 'workflow_dispatch' && startsWith(inputs.ref, 'v'))
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF##*/}"
           # release.sh creates the release with the web zip right after pushing
-          # the tag; retry until it exists, then upload.
+          # the tag; retry until it exists, then upload. On a backfill dispatch
+          # the release already exists, so this succeeds immediately.
           for i in $(seq 1 60); do
             if gh release view "${TAG}" >/dev/null 2>&1; then
               gh release upload "${TAG}" "calculator-${TAG}-android-debug.apk" --clobber
@@ -95,11 +106,13 @@ jobs:
           exit 1
 
   ios:
-    name: iOS debug (simulator)
+    name: iOS/iPadOS debug (simulator)
     runs-on: macos-latest
     if: >-
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'ios'
     timeout-minutes: 30
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -127,7 +140,6 @@ jobs:
             build
       - name: Zip simulator .app with tag in name
         run: |
-          TAG="${GITHUB_REF##*/}"
           cd ios/build/Build/Products/Debug-iphonesimulator
           zip -ry "calculator-${TAG}-ios-simulator.app.zip" App.app
           cp "calculator-${TAG}-ios-simulator.app.zip" "$GITHUB_WORKSPACE/"
@@ -138,12 +150,13 @@ jobs:
           path: calculator-*-ios-simulator.app.zip
           if-no-files-found: error
           retention-days: 14
-      - name: Attach .app to release (tag pushes only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Attach .app to release
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          (github.event_name == 'workflow_dispatch' && startsWith(inputs.ref, 'v'))
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF##*/}"
           for i in $(seq 1 60); do
             if gh release view "${TAG}" >/dev/null 2>&1; then
               gh release upload "${TAG}" "calculator-${TAG}-ios-simulator.app.zip" --clobber
@@ -160,6 +173,8 @@ jobs:
     if: >-
       github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'macos'
     timeout-minutes: 40
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -180,7 +195,6 @@ jobs:
           CI: true
       - name: Collect + rename macOS bundle
         run: |
-          TAG="${GITHUB_REF##*/}"
           BUNDLE="src-tauri/target/release/bundle"
           mkdir -p out
           DMG=$(find "$BUNDLE/dmg" -name '*.dmg' 2>/dev/null | head -1)
@@ -192,7 +206,8 @@ jobs:
             cd "$(dirname "$APP")"
             zip -ry "$GITHUB_WORKSPACE/out/calculator-${TAG}-macos.app.zip" Calculator.app
           fi
-          ls -la out/
+          # Absolute path - we may have cd'd above, so `out/` relative would miss.
+          ls -la "$GITHUB_WORKSPACE/out/"
       - name: Upload artifact (always, for backfill downloads)
         uses: actions/upload-artifact@v7
         with:
@@ -200,12 +215,78 @@ jobs:
           path: out/*
           if-no-files-found: error
           retention-days: 14
-      - name: Attach bundle to release (tag pushes only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Attach bundle to release
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          (github.event_name == 'workflow_dispatch' && startsWith(inputs.ref, 'v'))
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF##*/}"
+          for i in $(seq 1 60); do
+            if gh release view "${TAG}" >/dev/null 2>&1; then
+              gh release upload "${TAG}" out/* --clobber
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "release ${TAG} not found after 10min" >&2
+          exit 1
+
+  windows:
+    name: Windows Tauri (unsigned)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    if: >-
+      github.event_name == 'push' || inputs.platforms == 'all' || inputs.platforms == 'windows'
+    timeout-minutes: 40
+    env:
+      TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Tauri build (unsigned)
+        run: npx tauri build
+        env:
+          CI: true
+      - name: Collect + rename Windows bundle
+        run: |
+          BUNDLE="src-tauri/target/release/bundle"
+          mkdir -p out
+          EXE=$(find "$BUNDLE/nsis" -name '*-setup.exe' 2>/dev/null | head -1)
+          MSI=$(find "$BUNDLE/msi" -name '*.msi' 2>/dev/null | head -1)
+          if [ -n "$EXE" ]; then
+            cp "$EXE" "out/calculator-${TAG}-windows-setup.exe"
+          fi
+          if [ -n "$MSI" ]; then
+            cp "$MSI" "out/calculator-${TAG}-windows.msi"
+          fi
+          ls -la out/
+      - name: Upload artifact (always, for backfill downloads)
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-tauri
+          path: out/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Attach bundle to release
+        if: >-
+          startsWith(github.ref, 'refs/tags/') ||
+          (github.event_name == 'workflow_dispatch' && startsWith(inputs.ref, 'v'))
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
           for i in $(seq 1 60); do
             if gh release view "${TAG}" >/dev/null 2>&1; then
               gh release upload "${TAG}" out/* --clobber
