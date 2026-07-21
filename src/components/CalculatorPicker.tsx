@@ -61,6 +61,13 @@ const TILES: CalculatorTileDef[] = [
     glyph: '\u{1F9EA}',
     enabled: true,
   },
+  {
+    mode: 'advanced',
+    titleKey: 'picker.tile.advanced.title',
+    descKey: 'picker.tile.advanced.desc',
+    glyph: '\u{1F4D0}',
+    enabled: true,
+  },
   // ponytail: History is intentionally NOT a picker tile — it's a view of
   // past calculations, not a calculator itself. Picking it as the entry
   // point would land the user on an empty-state screen with no history.

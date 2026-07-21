@@ -21,7 +21,7 @@ const ARIA_OP: Record<string, string> = {
   '(': 'Open parenthesis', ')': 'Close parenthesis',
   '⌫': 'Backspace',
 };
-const TAB_LABELS = new Set(['基础', '科学', '历史', '程序员', '单位', '日期', '化学']);
+const TAB_LABELS = new Set(['基础', '科学', '历史', '程序员', '单位', '日期', '化学', '高数']);
 
 // ponytail: TabBar's t() output is locale-dependent. Tests pin 'lang-pref'='zh'
 // in clearAndSeedLocale (called from beforeEach) so the labels are stable:
@@ -447,9 +447,9 @@ test.describe('Sync settings panel', () => {
 });
 
 test.describe('Date / Time mode', () => {
-  test('Chemistry tab is the last tab in the order', async ({ page }) => {
+  test('Calculus tab is the last tab in the order', async ({ page }) => {
     const tabs = page.getByRole('tab');
-    await expect(tabs.last()).toHaveText('化学');
+    await expect(tabs.last()).toHaveText('高数');
   });
 
   test('switching to Date hides Display and Keypad', async ({ page }) => {
@@ -581,8 +581,8 @@ test.describe('Units + Currency mode', () => {
 test.describe('Programmer mode', () => {
   test('Programmer tab is the 4th tab in the locked order', async ({ page }) => {
     const labels = await page.getByRole('tab').allTextContents();
-    // locked: Basic / Scientific / History / Programmer / Units / Date / Chemistry
-    expect(labels).toEqual(['基础', '科学', '历史', '程序员', '单位', '日期', '化学']);
+    // locked: Basic / Scientific / History / Programmer / Units / Date / Chemistry / Calculus
+    expect(labels).toEqual(['基础', '科学', '历史', '程序员', '单位', '日期', '化学', '高数']);
   });
 
   test('switching to Programmer hides the basic Display + Keypad', async ({ page }) => {

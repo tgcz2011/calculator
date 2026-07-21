@@ -499,4 +499,63 @@ console.log('chemistry balancer:');
   check('missing arrow -> SYNTAX', balanceReaction('H2 O2').errorCode === 'SYNTAX');
 }
 
+console.log('advanced CAS (mathjs + katex):');
+{
+  const { derivative, taylorSeries, numericRoots, numericIntegral, numericLimit,
+    matrixOperation, truthTable, simplifySync, toTex, renderKatex } = await import('../src/advanced/cas');
+
+  const d1 = derivative('x^3', 'x', 1);
+  check('d/dx x^3 = 3x^2', d1.ok && d1.text === '3 * x ^ 2');
+  const d2 = derivative('x^3', 'x', 3);
+  check('d3/dx3 x^3 = 6', d2.ok && /6/.test(d2.text!));
+  const d3 = derivative('sin(x^2)', 'x', 1);
+  check('d/dx sin(x^2) has cos', d3.ok && d3.text!.includes('cos'));
+
+  const t1 = taylorSeries('e^x', 'x', 0, 4);
+  check('taylor e^x ok', t1.ok && t1.text!.startsWith('1 + 1 * x'));
+  const t2 = taylorSeries('sin(x)', 'x', 0, 5);
+  check('taylor sin(x) ok', t2.ok && t2.text!.includes('x'));
+
+  const r1 = numericRoots('x^2 - 4 = 0', 'x', -100, 100);
+  check('roots x^2-4=0 -> [-2,2]', r1.ok && r1.text === 'x = -2, x = 2');
+  const r2 = numericRoots('x^2 + 1 = 0', 'x', -100, 100);
+  check('roots x^2+1=0 -> none', r2.ok && r2.text!.includes('未找到'));
+  const r3 = numericRoots('sin(x) = 0', 'x', -10, 10);
+  check('roots sin(x)=0 finds >=3', r3.ok && (r3.text!.match(/x =/g) || []).length >= 3);
+
+  const i1 = numericIntegral('x^2', 'x', 0, 3);
+  check('integral x^2 0..3 = 9', i1.ok && Math.abs(Number(i1.text) - 9) < 1e-4);
+  const i2 = numericIntegral('sin(x)', 'x', 0, Math.PI);
+  check('integral sin(x) 0..pi = 2', i2.ok && Math.abs(Number(i2.text) - 2) < 1e-3);
+
+  const l1 = numericLimit('sin(x)/x', 'x', 0);
+  check('limit sin(x)/x ->0 = 1', l1.ok && Math.abs(Number(l1.text) - 1) < 1e-4);
+  const l2 = numericLimit('(1+1/x)^x', 'x', 'inf');
+  check('limit (1+1/x)^x ->inf = e', l2.ok && Math.abs(Number(l2.text) - Math.E) < 1e-3);
+
+  const m1 = matrixOperation('det', '1 2; 3 4');
+  check('det [[1,2],[3,4]] = -2', m1.ok && m1.scalar === -2);
+  const m2 = matrixOperation('inv', '1 2; 3 4');
+  check('inv ok', m2.ok && m2.matrix !== undefined);
+  const m3 = matrixOperation('eigs', '1 0; 0 2');
+  check('eigs diag(1,2)', m3.ok && m3.eigenvalues!.length === 2);
+  const m4 = matrixOperation('rref', '1 2 3; 4 5 6');
+  check('rref ok', m4.ok && m4.matrix !== undefined);
+  const m5 = matrixOperation('solve', '2 1; 1 -1', '5\n-2');
+  check('solve Ax=b ok', m5.ok && m5.matrix !== undefined);
+  const m6 = matrixOperation('solve', '2 1; 1 -1');
+  check('solve missing b -> error', !m6.ok);
+
+  const tt1 = truthTable('A and B');
+  check('truth A and B: 4 rows, 1 true', tt1.ok && tt1.rows.length === 4 && tt1.rows.filter((r) => r.result).length === 1);
+  const tt2 = truthTable('A xor B');
+  check('truth A xor B: 2 true', tt2.ok && tt2.rows.filter((r) => r.result).length === 2);
+
+  const s1 = simplifySync('2*x + 3*x');
+  check('simplify 2x+3x = 5x', s1.ok && s1.text === '5 * x');
+  const tx1 = toTex('x^2 + 2*x');
+  check('toTex ok', tx1.ok && tx1.tex!.includes('x'));
+  check('renderKatex produces html', renderKatex(tx1.tex!).includes('katex'));
+}
+
 console.log(`\n${passed} passed, 0 failed`);

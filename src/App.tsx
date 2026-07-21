@@ -8,6 +8,7 @@ import { DateTime } from './components/DateTime';
 import { Units } from './components/Units';
 import { Programmer } from './components/Programmer';
 import { ChemBalancer } from './components/ChemBalancer';
+import { AdvancedMath } from './components/AdvancedMath';
 import { CalculatorPicker } from './components/CalculatorPicker';
 import { Pill } from './components/Panel';
 import { useCalculator, type Mode } from './state/useCalculator';
@@ -476,7 +477,7 @@ export default function App() {
           {t('app.hint.rotate.tap')}
         </button>
       )}
-      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && (
+      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
             expression={calc.state.expression}
@@ -511,6 +512,8 @@ export default function App() {
         <Programmer />
       ) : calc.state.mode === 'chemistry' ? (
         <ChemBalancer />
+      ) : calc.state.mode === 'advanced' ? (
+        <AdvancedMath />
       ) : (
         <Keypad
           scientific={calc.state.mode === 'scientific'}
