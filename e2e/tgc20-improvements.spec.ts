@@ -58,19 +58,26 @@ test.describe('Calculator picker (item 2)', () => {
     await expect(page.getByTestId('calculator-picker')).toBeVisible();
   });
 
-  test('picker renders all five calculator tiles enabled (basic/scientific/programmer/units/date)', async ({ page }) => {
+  test('picker renders the original TGC-20 tiles (basic/scientific/programmer/units/date)', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    const tiles = page.locator('[data-testid^="picker-tile-"]');
-    const count = await tiles.count();
-    // ponytail: 5 tiles — basic, scientific, programmer, units, date.
-    // History is intentionally NOT a picker tile (it's a view, not a calculator).
-    expect(count).toBe(5);
-    const enabled = await page.locator('[data-testid^="picker-tile-"][data-enabled="true"]').count();
-    expect(enabled).toBe(5);
-    // Verify each tile is present by testid.
+    // ponytail: TGC-20 contract — these 5 tiles must be present and enabled.
+    // Total tile count is intentionally NOT asserted: TGC-22 added 5 more
+    // (chemistry / advanced / loan / tax / kin), and future milestones may
+    // add more. Each post-TGC-20 tile has its own spec (chemistry.spec.ts,
+    // advanced-math.spec.ts, tgc22-modules.spec.ts) — this test only owns
+    // the TGC-20 surface. History is intentionally NOT a picker tile.
     for (const m of ['basic', 'scientific', 'programmer', 'units', 'date']) {
       await expect(page.getByTestId(`picker-tile-${m}`)).toBeVisible();
+    }
+    const enabled = page.locator('[data-testid^="picker-tile-"][data-enabled="true"]');
+    for (const m of ['basic', 'scientific', 'programmer', 'units', 'date']) {
+      // ponytail: enabled is a CSS selector narrowing by attribute; intersect
+      // with the specific TGC-20 tile testid. `data-enabled="true"` lives on
+      // the same element as `data-testid="picker-tile-..."`.
+      await expect(
+        page.locator(`[data-testid="picker-tile-${m}"][data-enabled="true"]`),
+      ).toHaveCount(1);
     }
   });
 
