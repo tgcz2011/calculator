@@ -22,18 +22,21 @@ Adding a new color? Add a token first, reference it by `var(--name)`. Don't
 inline-style it. Component-level overrides belong inline at the use site, but
 the *value* still comes from a token.
 
-## 2. Display vs. keypad contrast (Apple aesthetic)
+## 2. Display vs. keypad contrast
 
-The Apple calculator has a dark display strip on top contrasting with a lighter
-keypad below. We achieve this with two tokens:
+The display area uses its own surface + text tokens so it can diverge from the
+keypad surface when needed:
 
-- `--bg-display` — the display area background (dark in both themes for that
-  calculator-display look)
-- `--text-display` — display text color (white in both themes)
+- `--bg-display` — the display area background. Light mode: `#ffffff` (light
+  surface — user explicitly rejected the Apple-style dark strip in light mode).
+  Dark mode: `#000000` (true black strip, the calculator-display look).
+- `--text-display` — display text color. Light mode: `#000000`. Dark mode:
+  `#ffffff`. Follows the surface.
+- `--text-display-secondary` — muted expression input text. Translucent version
+  of the display text.
 
-Apply both to the `.display-area` wrapper in `App.tsx`. Do NOT apply `--bg`
-to the display — that's the keypad surface. Keeping them distinct is what
-creates the Apple-style contrast.
+Apply `--bg-display` + `--text-display` to the `.display-area` wrapper in
+`App.tsx`. Do NOT apply `--bg` to the display — that's the keypad surface.
 
 ## 3. Touch targets
 
@@ -153,9 +156,17 @@ non-interactive layer.
 
 ## 11. Locale-aware testing
 
-E2e tests pin `localStorage.setItem('lang-pref', 'zh')` in `clearAndSeedBasicSkip`
-to stabilize the locale across CI runners (otherwise `navigator.language`
-differs between GitHub Actions runners and breaks role-based selectors).
+E2e tests pin `localStorage.setItem('lang-pref', 'zh')` in `beforeEach`
+(via the `clearAndSeedLocale` helper in `calculator.spec.ts`, or inline in
+other specs) to stabilize the locale across CI runners (otherwise
+`navigator.language` differs between GitHub Actions runners and breaks
+role-based selectors).
+
+The home-screen picker always shows on boot (no `calc:last-pick` localStorage
+skip). Specs that need to enter the calculator click the `picker-tile-basic`
+testid after page load — see `pickBasic()` in `tgc20-improvements.spec.ts`
+or the `beforeEach` in `calculator.spec.ts` / `keyboard-extras.spec.ts` /
+`sync-webdav-flow.spec.ts`.
 
 When adding new e2e tests:
 
@@ -168,9 +179,10 @@ When adding new e2e tests:
 
 iOS notch / home-indicator safe areas are handled via
 `env(safe-area-inset-*)` in `.shell` padding. An extra inline `<style>` is
-injected at runtime (`ios-safe-area-display`) to extend the dark display
-background into the status bar area on iOS — this gives the Apple Calculator
-full-bleed look.
+injected at runtime (`ios-safe-area-display`) to extend the display surface
+(`--bg-display`) into the status bar area on iOS — this gives the Apple
+Calculator full-bleed look. The display surface is white in light mode and
+black in dark mode (see §2).
 
 Do NOT remove the `isIOS` guard — the safe-area tweak is iOS-only and breaks
 Android/Desktop layouts if applied globally.

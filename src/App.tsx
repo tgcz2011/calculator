@@ -52,12 +52,10 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
 // Other modes call unlock() so the user can rotate freely; a top-bar rotate
 // Pill lets the user manually flip orientation in any mode.
 
-// ponytail: home-screen picker persistence (TGC-20 item 2). When the user
-// hasn't picked a calculator yet, the picker shows. Once they pick, we
-// stash the choice under 'calc:last-pick' so subsequent loads skip it.
-// Tests clear localStorage before navigating, then either re-set the
-// preference (skip picker) or let it clear (force picker).
-const LAST_PICK_KEY = 'calc:last-pick';
+// ponytail: picker shows on every boot — the user wants the calculator
+// selector as the always-on entry point ("重启后一定要到选择计算器的界面去").
+// No localStorage persistence; onPick / onExitToPicker just toggle in-memory
+// state.
 
 // ponytail: desktop aspect-ratio lock persistence. When on, the desktop
 // shell keeps a 9/16 phone-like aspect ratio so resizing the window
@@ -97,27 +95,6 @@ const LETTER_KEY_MAP: Record<string, string> = (() => {
   }
   return m;
 })();
-
-function readLastPick(): Mode | null {
-  try {
-    const v = localStorage.getItem(LAST_PICK_KEY);
-    if (v === 'basic' || v === 'scientific' || v === 'history' ||
-        v === 'programmer' || v === 'units' || v === 'date') {
-      return v;
-    }
-  } catch {
-    // private mode
-  }
-  return null;
-}
-
-function writeLastPick(mode: Mode): void {
-  try {
-    localStorage.setItem(LAST_PICK_KEY, mode);
-  } catch {
-    // private mode
-  }
-}
 
 // ponytail (TGC-20 hotfix): the expression <input> in Display has its own
 // React onKeyDown that handles Backspace / Enter / Cmd-Z locally. When the
@@ -162,30 +139,11 @@ export default function App() {
     writeAspectLocked(aspectLocked);
   }, [aspectLocked]);
 
-  // ponytail: picker visibility. We start by hydrating from localStorage on
-  // mount (avoids a flash of the picker when the user has already chosen).
-  // null = no decision yet (show picker), Mode = skip picker & go there.
-  const [pickedMode, setPickedMode] = useState<Mode | null>(() => readLastPick());
-
-  // If something else (sync, theme, etc.) changes the URL or storage, keep
-  // pickedMode in sync. Single source of truth: localStorage.
-  useEffect(() => {
-    if (pickedMode) writeLastPick(pickedMode);
-  }, [pickedMode]);
-
-  // ponytail: restore the persisted mode on boot. readLastPick() hydrates
-  // pickedMode to skip the picker, but it never calls calc.setMode — so on
-  // reload the picker was skipped but the calculator stayed in 'basic' instead
-  // of the mode the user picked last time. onPick (the picker path) sets both,
-  // but the boot-hydration path only set pickedMode. This effect closes that
-  // gap: when pickedMode is non-null and the calc mode hasn't caught up, push
-  // it through setMode so the actual mode matches the persisted pick.
-  useEffect(() => {
-    if (pickedMode && calc.state.mode !== pickedMode) {
-      calc.setMode(pickedMode);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickedMode]);
+  // ponytail: picker visibility. Boot always starts on the picker — the user
+  // wants the calculator selector as the always-on entry point, so we no
+  // longer hydrate from / persist to 'calc:last-pick'. onPick sets the
+  // in-memory mode; onExitToPicker clears it back to null.
+  const [pickedMode, setPickedMode] = useState<Mode | null>(null);
 
   // ponytail: apply orientation for a mode. Scientific -> lock('landscape');
   // others -> unlock(). On desktop (non-rotatable display) we skip the lock
@@ -213,7 +171,6 @@ export default function App() {
   }, [orientation]);
 
   const onPick = useCallback((m: Mode) => {
-    writeLastPick(m);
     setPickedMode(m);
     calc.setMode(m);
     // ponytail: call lock() synchronously inside the click handler's task so
@@ -222,16 +179,6 @@ export default function App() {
     // loses the gesture, so mobile Chrome silently fails to enter fullscreen.
     applyOrientationForMode(m);
   }, [calc, applyOrientationForMode]);
-
-  // ponytail: boot hydration path. When pickedMode is restored from
-  // localStorage on reload, apply the orientation for that mode. This runs
-  // outside a user gesture, so on mobile web the lock will likely fail and
-  // the hint will show — that's OK, the user can tap it to retry with
-  // gesture context.
-  useEffect(() => {
-    if (pickedMode) applyOrientationForMode(pickedMode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickedMode]);
 
   // ponytail: wrap calc.setMode so the orientation lock fires synchronously
   // inside the TabBar chip's click handler (preserves user gesture for
@@ -250,14 +197,9 @@ export default function App() {
     });
   }, [orientation]);
 
-  // ponytail: exit-to-picker handler. Clears localStorage so the picker shows
-  // on next boot too (user-initiated "switch calculator" should persist).
+  // ponytail: exit-to-picker handler. Just clears in-memory state — the picker
+  // always shows on next boot anyway (no persistence to clear).
   const onExitToPicker = useCallback(() => {
-    try {
-      localStorage.removeItem(LAST_PICK_KEY);
-    } catch {
-      // private mode
-    }
     orientation.unlock();
     setPickedMode(null);
   }, [orientation]);

@@ -1,13 +1,9 @@
-// ponytail: home-screen calculator selector (TGC-20 item 2). The app boots
-// onto this picker the first time, and re-shows it whenever localStorage
-// 'calc:last-pick' is cleared. Once the user picks a calculator we stash
-// the choice so subsequent loads skip the picker (constraint from Leader:
-// "默认进 basic，或测试里跳过选择页" — auto-skip via localStorage).
-//
-// Today only Basic is fully implemented; Scientific / Programmer / Units /
-// Date / History live inside TabBar but aren't first-class tiles here yet.
-// The component is shaped as a list so adding a new calculator is one
-// config entry + one Mode case in App.tsx (no layout change).
+// ponytail: home-screen calculator selector (TGC-20 item 2). The picker is
+// the always-on entry point — App.tsx boots here every time (no localStorage
+// skip). All five calculators are first-class tiles below. History is NOT a
+// tile (it's a view of past calculations, reachable via the TabBar inside any
+// calculator). Adding a new calculator is one config entry + one Mode case in
+// App.tsx (no layout change).
 
 import type { CSSProperties } from 'react';
 import type { Mode } from '../state/useCalculator';
