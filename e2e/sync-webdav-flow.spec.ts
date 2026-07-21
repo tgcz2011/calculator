@@ -59,15 +59,19 @@ async function openSettingsAndConnect(page: Page, passphrase = 'correct-horse-ba
 
 test.beforeEach(async ({ page }) => {
   // ponytail: goto before clear - localStorage.clear() on about:blank (opaque
-  // origin) throws SecurityError on Chromium 131+. After clearing, seed the
-  // TGC-20 picker-skip pref and reload so App boots directly to the calculator.
+  // origin) throws SecurityError on Chromium 131+. After clearing, reload so
+  // App boots against a clean localStorage. Then click the Basic tile to
+  // enter the calculator (no more picker-skip localStorage — picker always
+  // shows). The open-sync-settings pill is only rendered in the calculator
+  // view, so we MUST enter the calculator before tests can open the sync panel.
   await page.goto('/');
   await page.evaluate(() => {
     localStorage.clear();
-    localStorage.setItem('calc:last-pick', 'basic');
   });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
+  await page.getByTestId('picker-tile-basic').click();
+  await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
 });
 
 test.describe('WebDAV sync flow', () => {

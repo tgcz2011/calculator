@@ -33,15 +33,12 @@ async function expressionText(page: Page): Promise<string> {
 }
 
 test.beforeEach(async ({ page }) => {
-  // TGC-20: home-screen picker (src/components/CalculatorPicker.tsx) shows
-  // when 'calc:last-pick' isn't set. Seed it before goto so App skips the
-  // picker on first paint.
-  await page.goto('/');
-  await page.evaluate(() => {
-    localStorage.setItem('calc:last-pick', 'basic');
-  });
+  // ponytail: picker always shows on boot now (no localStorage skip). Load
+  // the page, then click the Basic tile to enter the calculator.
   await page.goto('/');
   await page.waitForLoadState('networkidle');
+  await page.getByTestId('picker-tile-basic').click();
+  await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
 });
 
 test.describe('Keyboard extras', () => {

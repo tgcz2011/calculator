@@ -6,10 +6,10 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 // has aria-label "Angle mode, currently DEG/RAD" with visible text "DEG/RAD".
 // One helper that knows about all three.
 //
-// TGC-20: the home-screen calculator picker (src/components/CalculatorPicker.tsx)
-// shows on first load. Tests skip it by seeding 'calc:last-pick' = 'basic'
-// in beforeEach. Tabs/modes/picker are kept independent of keypad, so this
-// helper still works whether the keypad is basic or scientific.
+// ponytail: the home-screen calculator picker (src/components/CalculatorPicker.tsx)
+// always shows on boot. beforeEach clicks the Basic tile after page load so
+// tests land in the calculator. Tabs/modes/picker are kept independent of
+// keypad, so this helper still works whether the keypad is basic or scientific.
 const ARIA_OP: Record<string, string> = {
   '+': 'Add', '−': 'Subtract', '×': 'Multiply', '÷': 'Divide',
   '%': 'Percent', '±': 'Negate', '=': 'Equals',
@@ -24,10 +24,10 @@ const ARIA_OP: Record<string, string> = {
 const TAB_LABELS = new Set(['基础', '科学', '历史', '程序员', '单位', '日期']);
 
 // ponytail: TabBar's t() output is locale-dependent. Tests pin 'lang-pref'='zh'
-// in clearAndSeedBasicSkip so the labels are stable: 基础/科学/历史/程序员/单位/日期.
-// Sub-tabs in Date / Units modes also use Chinese labels (Units categories are
-// hardcoded Chinese in src/units/engine.ts; Date sub-tabs go through t() so
-// the zh pin keeps them stable).
+// in clearAndSeedLocale (called from beforeEach) so the labels are stable:
+// 基础/科学/历史/程序员/单位/日期. Sub-tabs in Date / Units modes also use
+// Chinese labels (Units categories are hardcoded Chinese in src/units/engine.ts;
+// Date sub-tabs go through t() so the zh pin keeps them stable).
 
 async function tap(page: Page, label: string): Promise<void> {
   if (TAB_LABELS.has(label)) {
@@ -59,22 +59,19 @@ async function errorCode(page: Page): Promise<string | null> {
   return resultLocator(page).getAttribute('data-error-code');
 }
 
-// ponytail: seed the picker-skip pref so tests don't have to click through
-// the home-screen calculator picker (TGC-20 item 2). We do the clear + seed
-// in a single evaluate so the App only has to navigate once — one fewer
-// full-page load per test, which matters on slow mobile viewports.
+// ponytail: clear localStorage and pin locale to 'zh' for the test expectations
+// (which mix English top-level tab labels with Chinese sub-tab / sync /
+// currency strings). detectLocale() falls back to navigator.language when
+// 'lang-pref' is unset, which differs between CI runners — pinning removes
+// that flakiness. H4 i18n fixes translated Date sub-tabs, SyncSettings labels,
+// and the currency snapshot, so we MUST pin to keep the Chinese expectations
+// in the tests below valid.
 //
-// Locale is pinned to 'zh' so the test expectations (which mix English
-// top-level tab labels with Chinese sub-tab / sync / currency strings) have
-// a single source of truth. detectLocale() falls back to navigator.language
-// when 'lang-pref' is unset, which differs between CI runners — pinning
-// removes that flakiness. H4 i18n fixes translated Date sub-tabs, SyncSettings
-// labels, and the currency snapshot, so we MUST pin to keep the Chinese
-// expectations in the tests below valid.
-async function clearAndSeedBasicSkip(page: Page): Promise<void> {
+// No picker-skip seed anymore — the picker always shows on boot. beforeEach
+// clicks the Basic tile after the second goto so tests land in the calculator.
+async function clearAndSeedLocale(page: Page): Promise<void> {
   await page.evaluate(() => {
     localStorage.clear();
-    localStorage.setItem('calc:last-pick', 'basic');
     localStorage.setItem('lang-pref', 'zh');
   });
 }
@@ -82,12 +79,15 @@ async function clearAndSeedBasicSkip(page: Page): Promise<void> {
 test.beforeEach(async ({ page }) => {
   // ponytail: goto before clear - localStorage.clear() on about:blank (opaque
   // origin) throws SecurityError on Chromium 131+. Navigate to origin, clear
-  // + seed picker-skip in one shot, then navigate again so App boots against
-  // a fully primed localStorage.
+  // + seed locale in one shot, then navigate again so App boots against a
+  // fully primed localStorage. Finally click the Basic tile to enter the
+  // calculator (no more picker-skip localStorage — picker always shows).
   await page.goto('/');
-  await clearAndSeedBasicSkip(page);
+  await clearAndSeedLocale(page);
   await page.goto('/');
   await page.waitForLoadState('networkidle');
+  await page.getByTestId('picker-tile-basic').click();
+  await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
 });
 
 test.describe('Basic mode', () => {
@@ -415,6 +415,10 @@ test.describe('Sync settings panel', () => {
     await page.getByTestId('open-sync-settings').click();
     await page.getByTestId('sync-username').fill('alice@example.com');
     await page.reload();
+    await page.waitForLoadState('networkidle');
+    // ponytail: picker always shows after reload (no persistence). Re-enter
+    // the calculator before opening sync settings again.
+    await page.getByTestId('picker-tile-basic').click();
     await page.getByTestId('open-sync-settings').click();
     await expect(page.getByTestId('sync-username')).toHaveValue('alice@example.com');
     await expect(page.getByTestId('sync-passphrase')).toHaveValue('');
@@ -490,8 +494,8 @@ test.describe('Date / Time mode', () => {
     await page.getByRole('tab', { name: '日期' }).click();
     await page.getByRole('tab', { name: '星期' }).click();
     await page.getByTestId('date-weekday-input').fill('2025-01-01');
-    // Locale is pinned to zh (lang-pref=zh in clearAndSeedBasicSkip), so only
-    // the zh weekday should render; the en slot must not exist.
+    // Locale is pinned to zh (lang-pref=zh in clearAndSeedLocale via beforeEach),
+    // so only the zh weekday should render; the en slot must not exist.
     await expect(page.getByTestId('date-weekday-zh')).toHaveText('星期三');
     await expect(page.getByTestId('date-weekday-en')).toHaveCount(0);
   });

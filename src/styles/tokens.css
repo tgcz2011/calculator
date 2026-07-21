@@ -97,7 +97,12 @@
   /* Surface */
   --bg: #f2f2f7;
   --bg-elevated: #ffffff;
-  --bg-display: #1c1c1e;
+  /* ponytail: light-mode display uses a light surface (not the Apple-style dark
+     strip). User explicitly rejected the dark strip in light mode twice —
+     "浅色模式又变黑底了，字都看不见". White-on-dark was the original design
+     but read as a bug to the user. Light surface + dark text is the expected
+     "light mode" look. Dark theme keeps the true-black display strip. */
+  --bg-display: #ffffff;
   --bg-glass: rgba(255, 255, 255, 0.72);
 
   /* Borders */
@@ -110,8 +115,11 @@
   --text-tertiary: #8e8e93;
   --text-on-accent: #ffffff;
   --text-on-operator: #ffffff;
-  --text-display: #ffffff;
-  --text-display-secondary: rgba(235, 235, 245, 0.6);
+  /* ponytail: display text follows the display surface — dark on light in
+     light mode (was white-on-dark). --text-display-secondary mirrors
+     --text-secondary's translucency so the expression input reads as muted. */
+  --text-display: #000000;
+  --text-display-secondary: rgba(60, 60, 67, 0.6);
 
   /* Brand */
   --accent: #007aff;

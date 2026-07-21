@@ -5,11 +5,9 @@ import { test, expect } from '@playwright/test';
 // one job — theme only.
 
 test.beforeEach(async ({ page }) => {
-  // TGC-20: seed picker-skip pref so App boots straight to the calculator.
-  await page.goto('/');
-  await page.evaluate(() => {
-    localStorage.setItem('calc:last-pick', 'basic');
-  });
+  // ponytail: picker always shows on boot now (no localStorage skip). The
+  // toggle-theme pill is rendered in the picker's top bar (App.tsx), so theme
+  // tests don't need to enter the calculator. We just load the page.
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 });

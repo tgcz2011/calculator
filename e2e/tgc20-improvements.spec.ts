@@ -8,22 +8,14 @@
 
 import { test, expect, type Page, type Locator } from '@playwright/test';
 
-async function seedBasicSkip(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.setItem('calc:last-pick', 'basic');
-  });
-}
-
-async function clearPickerPref(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.removeItem('calc:last-pick');
-  });
-}
-
-async function clearLocalePref(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    localStorage.removeItem('lang-pref');
-  });
+async function pickBasic(page: Page): Promise<void> {
+  // ponytail: picker always shows on boot now (no localStorage skip). Click
+  // the Basic tile to enter the calculator. Includes goto + networkidle so
+  // callers don't repeat it — replaces the old seedBasicSkip + goto pair.
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+  await page.getByTestId('picker-tile-basic').click();
+  await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
 }
 
 function resultLocator(page: Page): Locator {
@@ -41,37 +33,32 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('Calculator picker (item 2)', () => {
-  test('shows picker when no last-pick is stored', async ({ page }) => {
-    await clearPickerPref(page);
+  test('boot always shows the picker (no localStorage skip)', async ({ page }) => {
+    // beforeEach already clears localStorage; goto and confirm picker shows.
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     await expect(page.getByTestId('calculator-picker')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Basic' }).first()).toBeVisible();
   });
 
-  test('clicking the Basic tile enters the calculator and persists choice', async ({ page }) => {
-    await clearPickerPref(page);
+  test('clicking the Basic tile enters the calculator', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     await page.getByTestId('picker-tile-basic').click();
     await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
-    // picker-skip persisted
-    const stored = await page.evaluate(() => localStorage.getItem('calc:last-pick'));
-    expect(stored).toBe('basic');
     // basic keypad is rendered
     await expect(page.getByRole('button', { name: 'Open parenthesis' })).toBeVisible();
   });
 
-  test('returning visit with stored pref skips the picker', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
+  test('reload always returns to the picker (no persistence)', async ({ page }) => {
+    // Pick basic, then reload — picker must show again (no localStorage skip).
+    await pickBasic(page);
+    await page.reload();
     await page.waitForLoadState('networkidle');
-    await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Open parenthesis' })).toBeVisible();
+    await expect(page.getByTestId('calculator-picker')).toBeVisible();
   });
 
   test('picker renders all five calculator tiles enabled (basic/scientific/programmer/units/date)', async ({ page }) => {
-    await clearPickerPref(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     const tiles = page.locator('[data-testid^="picker-tile-"]');
@@ -87,14 +74,11 @@ test.describe('Calculator picker (item 2)', () => {
     }
   });
 
-  test('picking Scientific tile enters scientific mode and persists choice', async ({ page }) => {
-    await clearPickerPref(page);
+  test('picking Scientific tile enters scientific mode', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     await page.getByTestId('picker-tile-scientific').click();
     await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
-    const stored = await page.evaluate(() => localStorage.getItem('calc:last-pick'));
-    expect(stored).toBe('scientific');
     // Scientific keypad renders the scientific function grid (sin / cos / etc.)
     // Use exact: true because "Cosine" contains "Sine" as a substring.
     await expect(page.getByRole('button', { name: 'Sine', exact: true })).toBeVisible();
@@ -103,9 +87,7 @@ test.describe('Calculator picker (item 2)', () => {
 
 test.describe('Language switcher (item 3)', () => {
   test('toggle switches locale and persists', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     const before = await page.evaluate(() => localStorage.getItem('lang-pref'));
     await page.getByTestId('toggle-locale').click();
     const after = await page.evaluate(() => localStorage.getItem('lang-pref'));
@@ -114,12 +96,8 @@ test.describe('Language switcher (item 3)', () => {
   });
 
   test('TabBar labels reflect the active locale', async ({ page }) => {
-    await seedBasicSkip(page);
-    await clearLocalePref(page);
-    // Force zh locale.
     await page.evaluate(() => localStorage.setItem('lang-pref', 'zh'));
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     // First tab is Basic; in zh that's "基础".
     await expect(page.getByRole('tab').first()).toHaveText('基础');
 
@@ -129,10 +107,8 @@ test.describe('Language switcher (item 3)', () => {
   });
 
   test('display error message localizes based on locale', async ({ page }) => {
-    await seedBasicSkip(page);
     await page.evaluate(() => localStorage.setItem('lang-pref', 'en'));
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     await page.keyboard.type('1+');
     await page.keyboard.press('Enter');
     await expect(resultLocator(page)).toContainText('Expression incomplete');
@@ -146,10 +122,8 @@ test.describe('Language switcher (item 3)', () => {
   });
 
   test('unknown symbol error localizes on switch', async ({ page }) => {
-    await seedBasicSkip(page);
     await page.evaluate(() => localStorage.setItem('lang-pref', 'en'));
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     await page.keyboard.type('foo+1');
     // Live error - UNKNOWN_SYMBOL is not deferred.
     await expect(resultLocator(page)).toContainText('Unknown symbol');
@@ -159,10 +133,8 @@ test.describe('Language switcher (item 3)', () => {
   });
 
   test('<html lang> reflects active locale', async ({ page }) => {
-    await seedBasicSkip(page);
     await page.evaluate(() => localStorage.setItem('lang-pref', 'zh'));
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
     await page.getByTestId('toggle-locale').click();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
@@ -171,18 +143,14 @@ test.describe('Language switcher (item 3)', () => {
 
 test.describe('Basic mode parens (item 4)', () => {
   test('parenthesis buttons insert ( and )', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     await page.getByRole('button', { name: 'Open parenthesis' }).click();
     await page.getByRole('button', { name: 'Close parenthesis' }).click();
     await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('()');
   });
 
   test('nested parens evaluate correctly', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     for (const k of ['(', '2', '+', '3', ')', '×', '(', '4', '+', '1', ')', '=']) {
       if (k === '(') await page.getByRole('button', { name: 'Open parenthesis' }).click();
       else if (k === ')') await page.getByRole('button', { name: 'Close parenthesis' }).click();
@@ -195,9 +163,7 @@ test.describe('Basic mode parens (item 4)', () => {
   });
 
   test('PAREN error stays hidden until `=` on unmatched paren', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     await page.getByRole('button', { name: 'Open parenthesis' }).click();
     await page.getByRole('button', { name: '1', exact: true }).click();
     await page.getByRole('button', { name: 'Add' }).click();
@@ -211,9 +177,7 @@ test.describe('Basic mode parens (item 4)', () => {
 
 test.describe('Basic mode backspace (item 5)', () => {
   test('backspace key removes one character at a time', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     for (const k of ['1', '2', '3', '4']) {
       await page.getByRole('button', { name: k, exact: true }).click();
     }
@@ -225,9 +189,7 @@ test.describe('Basic mode backspace (item 5)', () => {
   });
 
   test('backspace after committed error clears the error', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     await page.keyboard.type('1+');
     await page.keyboard.press('Enter');
     await expect.poll(() => resultLocator(page).getAttribute('data-error-code')).toBe('UNCLOSED');
@@ -241,9 +203,7 @@ test.describe('Basic mode backspace (item 5)', () => {
   // via keyboard — Display's local onKeyDown and App's window listener both
   // see the event; without the guard one press deleted two characters.
   test('keyboard Backspace on focused input deletes exactly one character', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     const input = page.locator('input[aria-label="Expression"]');
     // Build "1234" via the keypad so the cursor naturally lands at end (4).
     for (const k of ['1', '2', '3', '4']) {
@@ -276,9 +236,7 @@ test.describe('Basic mode backspace (item 5)', () => {
   // related Enter-double-history bug (two equals() calls would record the
   // same expression twice into history). One press, one history entry.
   test('keyboard Enter on focused input records history exactly once', async ({ page }) => {
-    await seedBasicSkip(page);
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await pickBasic(page);
     const input = page.locator('input[aria-label="Expression"]');
     // Operators expose aria-label = "Add" / "Subtract" etc., not the visible
     // symbol. We click the keypad buttons directly with the accessible name.
