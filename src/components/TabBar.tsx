@@ -11,7 +11,7 @@ interface Props {
   t(key: string): string;
 }
 
-const MODES: Mode[] = ['basic', 'scientific', 'history', 'programmer', 'units', 'date', 'chemistry'];
+const MODES: Mode[] = ['basic', 'scientific', 'history', 'programmer', 'units', 'date', 'chemistry', 'advanced'];
 
 export function TabBar({ mode, angle, onMode, onAngle, t }: Props) {
   return (
