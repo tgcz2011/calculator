@@ -7,6 +7,7 @@ export const zh: Record<string, string> = {
   'mode.programmer': '程序员',
   'mode.units': '单位',
   'mode.date': '日期',
+  'mode.chemistry': '化学',
   'mode.angle.deg': '角度',
   'mode.angle.rad': '弧度',
 
@@ -39,6 +40,8 @@ export const zh: Record<string, string> = {
   'picker.tile.units.desc': '长度、重量、温度、货币',
   'picker.tile.date.title': '日期',
   'picker.tile.date.desc': '日期间隔、星期',
+  'picker.tile.chemistry.title': '化学配平',
+  'picker.tile.chemistry.desc': '化学方程式配平',
   'picker.tile.history.title': '历史',
   'picker.tile.history.desc': '查看之前的算式',
   'picker.locked': '即将推出',
@@ -87,6 +90,19 @@ export const zh: Record<string, string> = {
   'units.swap': '互换单位',
   'units.result': '结果',
   'units.currency.snapshot': '快照汇率 · 更新于 {date} · 离线可用',
+
+  // Chemistry balancer mode
+  'chem.input.label': '反应式',
+  'chem.input.placeholder': 'H2 + O2 -> H2O',
+  'chem.balance': '配平',
+  'chem.clear': '清空',
+  'chem.examples': '示例',
+  'chem.result.title': '配平结果',
+  'chem.conservation.title': '原子守恒',
+  'chem.conservation.element': '元素',
+  'chem.conservation.reactants': '反应物',
+  'chem.conservation.products': '生成物',
+  'chem.charge': '电荷',
 
   // Date/Time mode
   'date.sub.diff': '差值',

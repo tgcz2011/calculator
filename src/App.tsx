@@ -7,6 +7,7 @@ import { SyncSettings } from './components/SyncSettings';
 import { DateTime } from './components/DateTime';
 import { Units } from './components/Units';
 import { Programmer } from './components/Programmer';
+import { ChemBalancer } from './components/ChemBalancer';
 import { CalculatorPicker } from './components/CalculatorPicker';
 import { Pill } from './components/Panel';
 import { useCalculator, type Mode } from './state/useCalculator';
@@ -108,6 +109,25 @@ function isExpressionInputTarget(t: EventTarget | null): boolean {
     t instanceof HTMLInputElement &&
     t.getAttribute('aria-label') === 'Expression'
   );
+}
+
+// ponytail: editable text fields of the non-basic modes (chemistry, advanced,
+// units amount, and the loan/tax/relationship modules). When one of these has
+// focus, the window-level keydown handler must NOT hijack keystrokes - the
+// digit/op/letter routing below calls preventDefault() and shoves the char
+// into the basic calculator via calc.insert(), which eats the typed character
+// (Tester repro: type() into chemistry/advanced inputs dropped digits and
+// operators; fill() hid it because it sets value directly).
+//
+// The basic calculator's Expression input is readOnly and deliberately relies
+// on this handler routing through calc.insert() (it can't accept native
+// typing), so it's excluded here and keeps its existing TGC-20 behavior -
+// isExpressionInputTarget() still owns its Enter/Backspace/Escape skipping.
+function isEditableFieldTarget(t: EventTarget | null): boolean {
+  if (t instanceof HTMLInputElement) {
+    return t.getAttribute('aria-label') !== 'Expression';
+  }
+  return t instanceof HTMLTextAreaElement;
 }
 
 export default function App() {
@@ -219,6 +239,12 @@ export default function App() {
         }
         return;
       }
+      // ponytail: editable fields of other modes own their keystrokes. Bail
+      // before the routing below so typed chars reach the field natively
+      // instead of being preventDefault()'d into the basic calculator. The
+      // basic calculator's Expression input is readOnly and excluded by
+      // isEditableFieldTarget, so its TGC-20 handling below is preserved.
+      if (isEditableFieldTarget(e.target)) return;
       // ponytail (TGC-20 hotfix): when the expression input has focus, Display's
       // own onKeyDown handles Enter / Backspace / Cmd+Z / Escape. Skip our
       // window-level handling for those keys so we don't double-dispatch — the
@@ -450,7 +476,7 @@ export default function App() {
           {t('app.hint.rotate.tap')}
         </button>
       )}
-      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
+      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
             expression={calc.state.expression}
@@ -483,6 +509,8 @@ export default function App() {
         <Units />
       ) : calc.state.mode === 'programmer' ? (
         <Programmer />
+      ) : calc.state.mode === 'chemistry' ? (
+        <ChemBalancer />
       ) : (
         <Keypad
           scientific={calc.state.mode === 'scientific'}
