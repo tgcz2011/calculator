@@ -22,10 +22,13 @@ export const zh: Record<string, string> = {
   'common.clear': '清空',
   'common.home': '返回主页选择计算器',
   'common.rotate': '切换屏幕方向',
+  'common.aspect.lock': '锁定长宽比',
+  'common.aspect.unlock': '解锁长宽比',
+  'app.hint.rotate.tap': '点按此处进入横屏 · 展开科学函数键盘',
 
   // Picker (home)
   'picker.title': '选择计算器',
-  'picker.subtitle': '挑一个开始用，更多类型在路上',
+  'picker.subtitle': '挑一个开始用',
   'picker.tile.basic.title': '基础',
   'picker.tile.basic.desc': '加减乘除，日常生活',
   'picker.tile.scientific.title': '科学',
