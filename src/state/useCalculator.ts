@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { engine, type AngleMode } from '../engine';
 import { history } from '../history/api';
 
-export type Mode = 'basic' | 'scientific' | 'history' | 'programmer' | 'units' | 'date' | 'chemistry' | 'advanced';
+export type Mode = 'basic' | 'scientific' | 'history' | 'programmer' | 'units' | 'date' | 'chemistry' | 'advanced' | 'loan' | 'tax' | 'kin';
 
 // ponytail: codes that mean "expression isn't finished yet" rather than
 // "expression is wrong". These are deferred — Display won't surface them

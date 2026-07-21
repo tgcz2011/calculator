@@ -558,4 +558,114 @@ console.log('advanced CAS (mathjs + katex):');
   check('renderKatex produces html', renderKatex(tx1.tex!).includes('katex'));
 }
 
+console.log('TGC-22 loan engine:');
+{
+  const loan = await import('../src/loan/engine');
+  // Equal payment: 1,000,000 @ 4.20% / 30y (360 mo)
+  const ep = loan.equalPaymentMonthly(1000000, 4.20, 360);
+  check('loan 1M @ 4.20% / 30y monthly ≈ 4891', Math.abs(ep - 4891) < 5);
+  // Total interest over 30y ≈ 760000
+  const res = loan.buildSchedule('equal-payment', {
+    principal: 1000000, annualRatePercent: 4.20, termMonths: 360,
+  });
+  check('loan 1M @ 4.20% / 30y total payment ≈ 1.76M', Math.abs(res.totalPayment - 1760000) < 5000);
+  check('loan 1M @ 4.20% / 30y total interest ≈ 760k', Math.abs(res.totalInterest - 760000) < 5000);
+  check('loan effective APR ≈ 4.20%', Math.abs(res.effectiveAnnualRate - 0.042) < 0.001);
+  // Equal-principal first month > equal-payment (since equal-payment is the average)
+  const eqFirst = loan.equalPrincipalMonthly(1000000, 4.20, 360, 1);
+  check('loan equal-principal first payment > average', eqFirst.payment > ep);
+  // Prepay shorten-term: should save interest + shorten term
+  const base = loan.buildSchedule('equal-payment', {
+    principal: 1000000, annualRatePercent: 4.20, termMonths: 360,
+  });
+  const prepay = loan.buildSchedule('equal-payment', {
+    principal: 1000000, annualRatePercent: 4.20, termMonths: 360,
+    prepayAmount: 200000, prepayAtMonth: 12, prepayStrategy: 'shorten-term',
+  });
+  check('loan prepay saves interest', prepay.totalInterest < base.totalInterest);
+  check('loan prepay shortens term', prepay.effectiveTermMonths < base.effectiveTermMonths);
+  // IRR via Newton: cashflows[-P, ...Pmt] should solve to ~monthly rate
+  const cf = [-1000000];
+  for (let i = 0; i < 360; i++) cf.push(ep);
+  const r = loan.newtonIrr(cf, 0.005);
+  check('loan Newton IRR converges', r !== null && Math.abs(r * 12 - 0.042) < 0.001);
+  // impliedRate: full amount vs haircut -> APR > nominal
+  const imp = loan.impliedRate(950000, ep, 360);
+  check('loan implied rate higher than nominal when haircut', imp !== null && imp > 0.042);
+  // Zero rate -> simple division
+  const zero = loan.equalPaymentMonthly(120000, 0, 12);
+  check('loan zero rate = principal / months', Math.abs(zero - 10000) < 1e-6);
+}
+
+console.log('TGC-22 tax engine:');
+{
+  const tax = await import('../src/tax/engine');
+  // Tax-free: income 60k, no deductions => 0 tax
+  check('tax at threshold = 0', tax.annualTax(0) === 0);
+  check('tax 30k @ 3% = 900', tax.annualTax(30000) === 900);
+  check('tax 100k @ 10% / 2520 = 7480', tax.annualTax(100000) === 7480);
+  // Comprehensive: 300k - 36k social - 60k threshold - 60k deductions = 144000 taxable -> 10% bracket
+  // 144000 * 0.1 - 2520 = 11880
+  const comp = tax.computeComprehensive({
+    comprehensiveIncome: 300000,
+    socialInsurance: 36000,
+    specialDeduction: 60000, // ¥60k annual special deductions (e.g. one kid + elderly + mortgage)
+  });
+  check('tax comprehensive 300k - 60k special = 11880', comp.tax === 11880);
+  // Bonus separate vs combined: high income + moderate bonus -> combined usually wins
+  const tracks = tax.computeBonusTrack({
+    bonus: 50000,
+    comprehensiveIncome: 300000,
+    socialInsurance: 36000,
+    specialDeduction: 60000,
+  });
+  check('tax bonus tracks both finite', tracks.separate.totalTax > 0 && tracks.combined.totalTax > 0);
+  check('tax recommend picks a track', tax.recommendBonus({
+    bonus: 50000, comprehensiveIncome: 300000, socialInsurance: 36000, specialDeduction: 60000,
+  }).preferred.length > 0);
+  // Special deductions: empty -> 0
+  check('tax empty special deduction = 0', tax.totalSpecialDeduction(tax.EMPTY_DEDUCTIONS) === 0);
+  check('tax child education monthly 2000 * 1 kid = 24000 annual', tax.totalSpecialDeduction({
+    ...tax.EMPTY_DEDUCTIONS, childEducationPerKid: 2000, childEducationCount: 1,
+  }) === 24000);
+}
+
+console.log('TGC-22 kin engine (mumuy/relationship.js):');
+{
+  const relationship = (await import('relationship.js')).default;
+  // Basic
+  check('kin 妈妈 = 妈妈', JSON.stringify(relationship({ text: '妈妈' })) === '["妈妈"]');
+  check('kin 爸爸的妈妈 = 奶奶', JSON.stringify(relationship({ text: '爸爸的妈妈' })) === '["奶奶"]');
+  check('kin 妻子的爸爸 男 = 岳父', JSON.stringify(relationship({ text: '妻子的爸爸', sex: 1 })) === '["岳父"]');
+  // Region mode does not crash
+  const north = relationship({ text: '叔叔的爸爸', mode: 'greatway-north' });
+  const south = relationship({ text: '叔叔的爸爸', mode: 'greatway-south' });
+  check('kin region modes both return arrays', Array.isArray(north) && Array.isArray(south));
+  // Invalid input -> empty array
+  check('kin empty input -> empty array', relationship({ text: '' }).length === 0);
+  check('kin gibberish -> empty array', relationship({ text: '随便乱写' }).length === 0);
+}
+
+console.log('TGC-22 currency live rates (engine contract):');
+{
+  // engine.ts exports a fetchLiveRates function. With no network, it should
+  // fall back to bundled rates.json (and write nothing to localStorage on
+  // success... well, on failure it might also stay clean). The important
+  // contract: never throws, always returns a payload.
+  const { fetchLiveRates } = await import('../src/units/engine');
+  // Stub out fetch so we don't depend on the network for the smoke test.
+  const realFetch = (globalThis as any).fetch;
+  (globalThis as any).fetch = () => Promise.reject(new Error('offline'));
+  try {
+    const payload = await fetchLiveRates(true);
+    check('currency fetchLiveRates never throws on offline', !!payload);
+    check('currency fetchLiveRates returns object with rates', typeof payload.rates === 'object' && payload.rates !== null);
+    check('currency fetchLiveRates returns base', typeof payload.base === 'string' && payload.base.length > 0);
+    check('currency fetchLiveRates returns source', typeof payload.source === 'string');
+  } finally {
+    (globalThis as any).fetch = realFetch;
+  }
+
+}
+
 console.log(`\n${passed} passed, 0 failed`);
