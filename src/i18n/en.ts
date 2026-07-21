@@ -8,6 +8,7 @@ export const en: Record<string, string> = {
   'mode.programmer': 'Programmer',
   'mode.units': 'Units',
   'mode.date': 'Date',
+  'mode.chemistry': 'Chemistry',
   'mode.angle.deg': 'Degree',
   'mode.angle.rad': 'Radian',
 
@@ -40,6 +41,8 @@ export const en: Record<string, string> = {
   'picker.tile.units.desc': 'Length, mass, temperature, currency',
   'picker.tile.date.title': 'Date',
   'picker.tile.date.desc': 'Date diff and weekday',
+  'picker.tile.chemistry.title': 'Chemistry',
+  'picker.tile.chemistry.desc': 'Balance chemical equations',
   'picker.tile.history.title': 'History',
   'picker.tile.history.desc': 'Review past calculations',
   'picker.locked': 'Coming soon',
@@ -87,6 +90,19 @@ export const en: Record<string, string> = {
   'units.swap': 'Swap units',
   'units.result': 'Result',
   'units.currency.snapshot': 'Snapshot rates · updated {date} · works offline',
+
+  // Chemistry balancer mode
+  'chem.input.label': 'Reaction',
+  'chem.input.placeholder': 'H2 + O2 -> H2O',
+  'chem.balance': 'Balance',
+  'chem.clear': 'Clear',
+  'chem.examples': 'Examples',
+  'chem.result.title': 'Balanced',
+  'chem.conservation.title': 'Atom conservation',
+  'chem.conservation.element': 'Element',
+  'chem.conservation.reactants': 'Reactants',
+  'chem.conservation.products': 'Products',
+  'chem.charge': 'Charge',
 
   // Date/Time mode
   'date.sub.diff': 'Difference',

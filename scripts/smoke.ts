@@ -446,4 +446,57 @@ console.log('units + currency:');
   check('100 EUR -> 100 EUR (no-op)', Math.abs(curr(100, 'EUR', 'EUR') - 100) < 1e-6);
 }
 
+console.log('chemistry balancer:');
+{
+  const { balanceReaction } = await import('../src/chemistry/balancer');
+  const coeffs = (r: ReturnType<typeof balanceReaction>) =>
+    r.compounds!.map((c) => c.coefficient);
+
+  const r1 = balanceReaction('H2 + O2 -> H2O');
+  check('H2+O2->H2O ok', r1.ok);
+  check('coeffs [2,1,2]', JSON.stringify(coeffs(r1)) === '[2,1,2]');
+  check('equation string', r1.equation === '2 H2 + O2 -> 2 H2O');
+  check('conservation all balanced', r1.conservation!.every((c) => c.balanced));
+
+  const r2 = balanceReaction('Fe2+ + Cu -> Fe + Cu2+');
+  check('redox Fe2+ ok', r2.ok && JSON.stringify(coeffs(r2)) === '[1,1,1,1]');
+  check('redox charge balanced', r2.chargeBalance!.balanced);
+
+  const r3 = balanceReaction('Ca(OH)2 + HCl -> CaCl2 + H2O');
+  check('parens Ca(OH)2 coeffs [1,2,1,2]', r3.ok && JSON.stringify(coeffs(r3)) === '[1,2,1,2]');
+
+  const r4 = balanceReaction('C3H8 + O2 -> CO2 + H2O');
+  check('combustion coeffs [1,5,3,4]', r4.ok && JSON.stringify(coeffs(r4)) === '[1,5,3,4]');
+
+  const r5 = balanceReaction('CuSO4·5H2O -> CuSO4 + H2O');
+  check('hydrate coeffs [1,1,5]', r5.ok && JSON.stringify(coeffs(r5)) === '[1,1,5]');
+
+  const r6 = balanceReaction('Na+ + Cl- -> NaCl');
+  check('ions coeffs [1,1,1]', r6.ok && JSON.stringify(coeffs(r6)) === '[1,1,1]');
+
+  const r7 = balanceReaction('(NH4)2SO4 -> NH3 + H2SO4');
+  check('nested parens coeffs [1,2,1]', r7.ok && JSON.stringify(coeffs(r7)) === '[1,2,1]');
+
+  const r8 = balanceReaction('2 H2 + O2 = 2 H2O');
+  check('= arrow + user coeffs ignored', r8.ok && JSON.stringify(coeffs(r8)) === '[2,1,2]');
+  check('= arrow preserved', r8.arrow === '=');
+
+  // Hard redox case (large coefficients) - exact rational arithmetic must not
+  // mis-snap. Float null-space + rounding would give wrong ints here.
+  const r9 = balanceReaction('KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2');
+  check('redox KMnO4 coeffs [2,16,2,2,8,5]', r9.ok && JSON.stringify(coeffs(r9)) === '[2,16,2,2,8,5]');
+  check('redox KMnO4 conservation', r9.conservation!.every((c) => c.balanced));
+
+  // SO4^2- caret charge notation
+  const r10 = balanceReaction('BaCl2 + Na2SO4 -> BaSO4 + NaCl');
+  check('double displacement coeffs [1,1,1,2]', r10.ok && JSON.stringify(coeffs(r10)) === '[1,1,1,2]');
+
+  // Error paths
+  check('ambiguous -> AMBIGUOUS', !balanceReaction('C + O2 -> CO + CO2').ok && balanceReaction('C + O2 -> CO + CO2').errorCode === 'AMBIGUOUS');
+  check('no solution -> NO_SOLUTION', balanceReaction('H2 -> O2').errorCode === 'NO_SOLUTION');
+  check('no arrow -> SYNTAX', balanceReaction('H2 + O2').errorCode === 'SYNTAX');
+  check('empty -> EMPTY', balanceReaction('').errorCode === 'EMPTY');
+  check('missing arrow -> SYNTAX', balanceReaction('H2 O2').errorCode === 'SYNTAX');
+}
+
 console.log(`\n${passed} passed, 0 failed`);
