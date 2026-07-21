@@ -10,8 +10,8 @@
 import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import {
   CATEGORIES,
-  CURRENCY_UPDATED_AT,
-  CURRENCY_SOURCE,
+  getCurrencyUpdatedAt,
+  getCurrencySource,
   convertUnits,
   fetchLiveRates,
   formatStamp,
@@ -126,10 +126,10 @@ export function Units() {
         <div style={stampRowStyle} data-testid="currency-snapshot">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-              {t('units.currency.snapshot', { date: formatStamp(CURRENCY_UPDATED_AT) })}
+              {t('units.currency.snapshot', { date: formatStamp(getCurrencyUpdatedAt()) })}
             </span>
             <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }} data-testid="currency-source">
-              {t('units.currency.source', { source: sourceLabel(CURRENCY_SOURCE) })}
+              {t('units.currency.source', { source: sourceLabel(getCurrencySource()) })}
             </span>
             {refreshErr && (
               <span style={{ fontSize: 11, color: 'var(--danger)' }} data-testid="currency-refresh-error">

@@ -447,9 +447,9 @@ test.describe('Sync settings panel', () => {
 });
 
 test.describe('Date / Time mode', () => {
-  test('Calculus tab is the last tab in the order', async ({ page }) => {
+  test('Kinship tab is the last tab in the order', async ({ page }) => {
     const tabs = page.getByRole('tab');
-    await expect(tabs.last()).toHaveText('高数');
+    await expect(tabs.last()).toHaveText('亲戚称呼');
   });
 
   test('switching to Date hides Display and Keypad', async ({ page }) => {
@@ -581,8 +581,9 @@ test.describe('Units + Currency mode', () => {
 test.describe('Programmer mode', () => {
   test('Programmer tab is the 4th tab in the locked order', async ({ page }) => {
     const labels = await page.getByRole('tab').allTextContents();
-    // locked: Basic / Scientific / History / Programmer / Units / Date / Chemistry / Calculus
-    expect(labels).toEqual(['基础', '科学', '历史', '程序员', '单位', '日期', '化学', '高数']);
+    // locked: Basic / Scientific / History / Programmer / Units / Date / Chemistry
+    //   / Calculus / Loan / Tax / Kinship (TGC-22 added the last three)
+    expect(labels).toEqual(['基础', '科学', '历史', '程序员', '单位', '日期', '化学', '高数', '贷款', '个税', '亲戚称呼']);
   });
 
   test('switching to Programmer hides the basic Display + Keypad', async ({ page }) => {

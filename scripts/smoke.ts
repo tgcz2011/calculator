@@ -648,12 +648,17 @@ console.log('TGC-22 kin engine (mumuy/relationship.js):');
 
 console.log('TGC-22 currency live rates (engine contract):');
 {
-  // engine.ts exports a fetchLiveRates function. With no network, it should
-  // fall back to bundled rates.json (and write nothing to localStorage on
-  // success... well, on failure it might also stay clean). The important
-  // contract: never throws, always returns a payload.
+  // engine.ts exports a fetchLiveRates function that must:
+  //   - never throw (always returns a payload)
+  //   - return an object with `rates` (non-empty dict), `base`, `source`
+  //   - prefer Frankfurter.dev or open.er-api.com when network is up
+  //   - fall back to LocalStorage cache, then bundled rates.json, when not
+  // When fetch is stubbed to reject, the engine must surface the offline
+  // contract via payload.source === 'bundled' (no network ever happened).
   const { fetchLiveRates } = await import('../src/units/engine');
-  // Stub out fetch so we don't depend on the network for the smoke test.
+
+  // (1) Offline contract: stubbed fetch -> bundled fallback. Source must be
+  // 'bundled', base = 'USD', rates = bundled baseline.
   const realFetch = (globalThis as any).fetch;
   (globalThis as any).fetch = () => Promise.reject(new Error('offline'));
   try {
@@ -662,10 +667,29 @@ console.log('TGC-22 currency live rates (engine contract):');
     check('currency fetchLiveRates returns object with rates', typeof payload.rates === 'object' && payload.rates !== null);
     check('currency fetchLiveRates returns base', typeof payload.base === 'string' && payload.base.length > 0);
     check('currency fetchLiveRates returns source', typeof payload.source === 'string');
+    check('currency offline source = bundled', payload.source === 'bundled');
+    check('currency offline rates covers CNY', typeof payload.rates.CNY === 'number');
+    check('currency offline rates covers EUR', typeof payload.rates.EUR === 'number');
+    check('currency offline rates covers USD=1', payload.rates.USD === 1);
   } finally {
     (globalThis as any).fetch = realFetch;
   }
 
+  // (2) Live contract: if the host actually has a network, the Frankfurter.dev
+  // or open.er-api.com fetch should succeed and return a non-bundled source.
+  // On a network-less runner (CI sandbox) the fallback path is exercised, and
+  // we only assert the function still returns a well-formed payload.
+  try {
+    const live = await fetchLiveRates(true);
+    const liveOk = live.source === 'frankfurter.dev' || live.source === 'open.er-api.com' || live.source === 'bundled';
+    check('currency live returns a recognized source', liveOk);
+    check('currency live base = USD', live.base === 'USD');
+    check('currency live rates count >= 5', Object.keys(live.rates).length >= 5);
+    check('currency live rates USD base = 1', live.rates.USD === 1);
+  } catch (e) {
+    // fetchLiveRates must never throw — if it does, that's a contract bug.
+    check('currency live did not throw', false);
+  }
 }
 
 console.log(`\n${passed} passed, 0 failed`);

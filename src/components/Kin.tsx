@@ -122,10 +122,10 @@ export function Kin() {
 
       <Field label={t('kin.sex.title')} testId="kin-sex">
         <ChipSegment role="radiogroup" ariaLabel={t('kin.sex.title')} layout="fill" shape="card">
-          <Chip active={sex === 1} onClick={() => setSex(1)} role="radio" fill data-testid="kin-sex-male">
+          <Chip active={sex === 1} onClick={() => setSex(1)} role="radio" fill testId="kin-sex-male">
             {t('kin.sex.male')}
           </Chip>
-          <Chip active={sex === 0} onClick={() => setSex(0)} role="radio" fill data-testid="kin-sex-female">
+          <Chip active={sex === 0} onClick={() => setSex(0)} role="radio" fill testId="kin-sex-female">
             {t('kin.sex.female')}
           </Chip>
         </ChipSegment>
@@ -133,10 +133,10 @@ export function Kin() {
 
       <Field label={t('kin.reverse.title')} testId="kin-reverse">
         <ChipSegment role="radiogroup" ariaLabel={t('kin.reverse.title')} layout="fill" shape="card">
-          <Chip active={!reverse} onClick={() => setReverse(false)} role="radio" fill data-testid="kin-reverse-mine">
+          <Chip active={!reverse} onClick={() => setReverse(false)} role="radio" fill testId="kin-reverse-mine">
             {t('kin.reverse.mine')}
           </Chip>
-          <Chip active={reverse} onClick={() => setReverse(true)} role="radio" fill data-testid="kin-reverse-theirs">
+          <Chip active={reverse} onClick={() => setReverse(true)} role="radio" fill testId="kin-reverse-theirs">
             {t('kin.reverse.theirs')}
           </Chip>
         </ChipSegment>

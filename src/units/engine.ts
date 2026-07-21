@@ -47,9 +47,21 @@ export const CURRENCY_RATES: Record<string, number> = (() => {
   return merged;
 })();
 
-export const CURRENCY_UPDATED_AT = liveRatesUpdatedAt || BASELINE_UPDATED_AT;
+// ponytail (TGC-22 bug-B follow-up): CURRENCY_UPDATED_AT and CURRENCY_SOURCE
+// must be LIVE getters, not const-captured strings. setLiveRates() mutates
+// the liveRatesUpdatedAt / liveRatesSource variables, but the original code
+// captured them at module load — once. Modules that imported the const string
+// saw only the bundled "snapshot" / bundled date forever, even after a live
+// fetch returned. These are functions that read the current closure state
+// at call time, so a `setLiveRates()` followed by `getCurrencyUpdatedAt()`
+// surfaces the freshly-fetched timestamp.
+export function getCurrencyUpdatedAt(): string {
+  return liveRatesUpdatedAt || BASELINE_UPDATED_AT;
+}
 export const CURRENCY_BASE = BASELINE_BASE;
-export const CURRENCY_SOURCE = liveRatesSource || 'snapshot';
+export function getCurrencySource(): string {
+  return liveRatesSource || 'snapshot';
+}
 
 export function setLiveRates(rates: Record<string, number>, updatedAt: string, source: string): void {
   liveRates = { ...rates };
@@ -68,10 +80,6 @@ export function clearLiveRates(): void {
   liveRatesSource = '';
   for (const k of Object.keys(CURRENCY_RATES)) delete CURRENCY_RATES[k];
   Object.assign(CURRENCY_RATES, BASELINE_RATES);
-}
-
-export function getCurrencySource(): string {
-  return CURRENCY_SOURCE;
 }
 
 export const CATEGORIES: readonly CategoryDef[] = [
@@ -236,7 +244,7 @@ function stripUnitSuffix(s: string): string {
 // returns the LocalStorage cache (if present) or null. The UI surfaces the
 // source label so the user can see which feed the current numbers came from.
 
-export type RatesSource = 'frankfurter' | 'exchangerate.host' | 'cache' | 'bundled' | 'none';
+export type RatesSource = 'frankfurter.dev' | 'open.er-api.com' | 'cache' | 'bundled' | 'none';
 
 export interface LiveRatesPayload {
   rates: Record<string, number>;
@@ -280,11 +288,14 @@ function writeCache(payload: LiveRatesPayload): void {
   }
 }
 
-// ponytail (TGC-22, module 1): both APIs speak JSON over HTTPS and ship CORS
-// headers wide open. We pass AbortSignal.timeout (3s) so a hung socket doesn't
-// strand the UI on a spinner.
+// ponytail (TGC-22 bug-B fix): Frankfurter moved domains from api.frankfurter.app
+// (which now 301-redirects) to api.frankfurter.dev. The .dev origin returns
+// `access-control-allow-origin: *` so browsers can fetch it directly — no
+// redirect chain to get tangled in CORS preflights. We hit .dev by default.
+// open.er-api.com is the fallback: 166 currencies (vs Frankfurter's ~33),
+// CORS-open, used when Frankfurter is unreachable.
 async function fetchFrankfurter(signal: AbortSignal): Promise<LiveRatesPayload | null> {
-  const res = await fetch('https://api.frankfurter.app/latest?base=USD', { signal });
+  const res = await fetch('https://api.frankfurter.dev/v1/latest?base=USD', { signal });
   if (!res.ok) return null;
   const data = await res.json() as { base?: string; rates?: Record<string, number>; date?: string };
   if (!data.rates || typeof data.rates !== 'object') return null;
@@ -294,21 +305,32 @@ async function fetchFrankfurter(signal: AbortSignal): Promise<LiveRatesPayload |
     rates,
     base: data.base ?? 'USD',
     updatedAt: data.date ? `${data.date}T00:00:00Z` : new Date().toISOString(),
-    source: 'frankfurter',
+    source: 'frankfurter.dev',
   };
 }
 
-async function fetchExchangerateHost(signal: AbortSignal): Promise<LiveRatesPayload | null> {
-  const res = await fetch('https://api.exchangerate.host/latest?base=USD', { signal });
+async function fetchOpenErApi(signal: AbortSignal): Promise<LiveRatesPayload | null> {
+  const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal });
   if (!res.ok) return null;
-  const data = await res.json() as { base?: string; rates?: Record<string, number>; date?: string };
+  const data = await res.json() as {
+    result?: string;
+    base_code?: string;
+    rates?: Record<string, number>;
+    time_last_update_unix?: number;
+  };
+  // open.er-api.com embeds `result: 'success' | 'error'`; only honor success.
+  if (data.result !== 'success') return null;
   if (!data.rates || typeof data.rates !== 'object') return null;
-  const rates: Record<string, number> = { ...data.rates, [data.base ?? 'USD']: 1 };
+  // Source includes base at 1 (open.er-api also omits it from the rates dict).
+  const rates: Record<string, number> = { ...data.rates, [data.base_code ?? 'USD']: 1 };
+  const updatedAt = typeof data.time_last_update_unix === 'number'
+    ? new Date(data.time_last_update_unix * 1000).toISOString()
+    : new Date().toISOString();
   return {
     rates,
-    base: data.base ?? 'USD',
-    updatedAt: data.date ? `${data.date}T00:00:00Z` : new Date().toISOString(),
-    source: 'exchangerate.host',
+    base: data.base_code ?? 'USD',
+    updatedAt,
+    source: 'open.er-api.com',
   };
 }
 
@@ -332,7 +354,7 @@ export async function fetchLiveRates(force = false): Promise<LiveRatesPayload> {
   }
   // Try primary then fallback. Each request gets its own 3s timeout.
   const errors: unknown[] = [];
-  for (const fetcher of [fetchFrankfurter, fetchExchangerateHost]) {
+  for (const fetcher of [fetchFrankfurter, fetchOpenErApi]) {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 3000);
@@ -371,10 +393,10 @@ export function formatStamp(iso: string): string {
 
 export function sourceLabel(src: string): string {
   switch (src) {
-    case 'frankfurter': return 'Frankfurter · ECB';
-    case 'exchangerate.host': return 'exchangerate.host';
-    case 'cache': return '离线缓存';
-    case 'bundled': return '本地快照';
+    case 'frankfurter.dev': return 'Frankfurter · ECB (live)';
+    case 'open.er-api.com': return 'open.er-api.com (live)';
+    case 'cache': return '离线缓存 (live)';
+    case 'bundled': return '本地快照 (offline)';
     default: return src;
   }
 }
