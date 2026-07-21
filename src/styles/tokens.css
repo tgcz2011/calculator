@@ -62,12 +62,33 @@
   --key-size: clamp(56px, 13vw, 76px);
   --key-fs: clamp(20px, 4.6vw, 30px);
   --key-pad: var(--s-2);
+  /* Compact keys (scientific fn grid, programmer) — smaller but still above
+     the 44px touch target floor. Kept as tokens so landscape media queries
+     can shrink them together with the main --key-size. */
+  --key-size-compact: clamp(48px, 10vw, 60px);
+  --key-fs-compact: clamp(15px, 3.4vw, 18px);
 
   /* Z-stack */
   --z-keypad: 1;
   --z-display: 2;
   --z-tabbar: 3;
   --z-modal: 100;
+}
+
+/* === Landscape on short viewports (phones rotated, landscape tablets).
+   Key + display sizing switches from vw to vh so 6+ rows of keys don't
+   overflow the available height. Without this, a phone in landscape
+   (375px tall) would compute --key-size = clamp(56, 13vw=106, 76) = 76px,
+   and 6 rows × 84px = 504px > 375px → keypad overflows into the display. === */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --display-fs: clamp(28px, 8vh, 48px);
+    --display-fs-expr: clamp(14px, 3vh, 20px);
+    --key-size: clamp(36px, 10vh, 52px);
+    --key-fs: clamp(13px, 3vh, 18px);
+    --key-size-compact: clamp(30px, 7vh, 40px);
+    --key-fs-compact: clamp(11px, 2.2vh, 14px);
+  }
 }
 
 /* === Light theme (Apple HIG base) === */

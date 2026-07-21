@@ -51,7 +51,10 @@ export function Keypad(props: Props) {
   return (
     <div
       style={{
-        '--key-size': 'clamp(56px, 13vw, 76px)',
+        // ponytail: don't override --key-size here — let tokens.css :root +
+        // landscape @media control it. Hardcoding clamp(56px, 13vw, 76px) here
+        // would block the landscape media query from shrinking keys, causing
+        // button overlap in landscape on phones.
         padding: 'var(--s-2) var(--s-3)',
         // ponytail: scientific mode adds 2 rows of function keys on top of the
         // 6 main rows. On a phone (esp. portrait) that pushed the keypad tall

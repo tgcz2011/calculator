@@ -121,7 +121,10 @@ export function Display(props: Props) {
 
   const exprStyle: CSSProperties = {
     fontSize: 'var(--display-fs-expr)',
-    color: 'var(--text-secondary)',
+    // ponytail (L7 fix): display area bg is --bg-display (dark in both themes).
+    // Must use --text-display-secondary (translucent white) so text is visible
+    // on the dark display strip. --text-secondary is dark in light mode = invisible.
+    color: 'var(--text-display-secondary)',
     fontWeight: 400,
     letterSpacing: '-0.01em',
     minHeight: '1.6em',
@@ -136,7 +139,9 @@ export function Display(props: Props) {
 
   const resultStyle: CSSProperties = {
     fontSize: 'var(--display-fs)',
-    color: shownError ? 'var(--danger)' : 'var(--text)',
+    // ponytail (L7 fix): use --text-display (white) for the result, not --text
+    // (black in light mode). The display area is always dark (--bg-display).
+    color: shownError ? 'var(--danger)' : 'var(--text-display)',
     fontWeight: 300,
     letterSpacing: '-0.03em',
     lineHeight: 1.05,

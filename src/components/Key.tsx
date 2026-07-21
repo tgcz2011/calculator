@@ -74,11 +74,14 @@ export function Key({
   }, [clearHoldTimer]);
   const style: CSSProperties = {
     flex: flex ?? (wide ? 2 : 1),
-    height: compact ? 'clamp(48px, 10vw, 60px)' : 'var(--key-size)',
-    minHeight: compact ? 'clamp(48px, 10vw, 60px)' : 'var(--key-size)',
+    // ponytail: use CSS vars (defined in tokens.css) so landscape media queries
+    // can shrink keys together. Hardcoded clamp() here would ignore the @media
+    // override and cause button overlap in landscape on phones.
+    height: compact ? 'var(--key-size-compact)' : 'var(--key-size)',
+    minHeight: compact ? 'var(--key-size-compact)' : 'var(--key-size)',
     margin: 'var(--s-1)',
     borderRadius: 'var(--radius-full)',
-    fontSize: compact ? 'clamp(15px, 3.4vw, 18px)' : 'var(--key-fs)',
+    fontSize: compact ? 'var(--key-fs-compact)' : 'var(--key-fs)',
     fontWeight: 500,
     fontFamily: mono ? 'var(--font-mono)' : 'inherit',
     background: palette.bg,
