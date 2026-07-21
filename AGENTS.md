@@ -1,5 +1,11 @@
 # AGENTS.md - Calculator repo
 
+## Spec & development rules (mandatory)
+
+- **Read `spec.md` before starting any work.** It is the single source of truth for every feature / requirement / improvement spec in this project, including the pitfall list (things already hit and fixed - do not re-hit them).
+- **Record every new spec in `spec.md`.** Any new feature, requirement, or improvement must get an entry (feature spec under §2, pitfall under §3, constraint under §4) before or alongside its PR.
+- Purpose: avoid solving the same problem twice and avoid wasted effort. This rule is project-owner-mandated.
+
 ## Build commands (run from repo root)
 
 - `npm install` - install deps
