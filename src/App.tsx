@@ -14,6 +14,7 @@ import { useKeyboard } from './native/keyboard';
 import { useKeyboardExtras } from './hooks/useKeyboardExtras';
 import { useTheme } from './hooks/useTheme';
 import { useI18n } from './hooks/useI18n';
+import { useOrientation } from './hooks/useOrientation';
 import { isIOS, isDesktop, isMobileNative, isWeb } from './native/platform';
 
 // ponytail: width breakpoint -> shell width class. Three tiers:
@@ -44,24 +45,12 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
   return tier;
 }
 
-// ponytail: scientific mode is cramped on a phone in portrait — the 6-col fn
-// grid + 6 main rows don't fit comfortably. Landscape gives the width the
-// scientific layout was designed for. Forcing orientation lock only works in
-// fullscreen PWA / native (screen.orientation.lock throws otherwise), so we
-// nudge with a dismissible hint instead. Clears automatically when rotated.
-function useIsPortrait(): boolean {
-  const [portrait, setPortrait] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(orientation: portrait)').matches;
-  });
-  useEffect(() => {
-    const mq = window.matchMedia('(orientation: portrait)');
-    const handler = () => setPortrait(mq.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return portrait;
-}
+// ponytail: scientific mode forces landscape (useOrientation.lock). On iOS
+// Safari the Screen Orientation API is unsupported — there, lock() returns
+// false and the App shows a dismissible rotate hint instead. The rotate hint
+// is gated on lockFailed so it only appears when we couldn't actually lock.
+// Other modes call unlock() so the user can rotate freely; a top-bar rotate
+// Pill lets the user manually flip orientation in any mode.
 
 // ponytail: home-screen picker persistence (TGC-20 item 2). When the user
 // hasn't picked a calculator yet, the picker shows. Once they pick, we
@@ -122,11 +111,15 @@ function isExpressionInputTarget(t: EventTarget | null): boolean {
 export default function App() {
   const calc = useCalculator();
   const tier = useShellWidth();
-  const isPortrait = useIsPortrait();
+  const orientation = useOrientation();
   const { theme, toggle: toggleTheme } = useTheme();
   const i18n = useI18n();
   const { t, locale, toggleLocale } = i18n;
   const [syncOpen, setSyncOpen] = useState(false);
+  // ponytail: scientific mode forces landscape. Track whether the lock attempt
+  // succeeded — if it failed (iOS Safari, non-fullscreen desktop), show a
+  // dismissible hint instead. Cleared when leaving scientific mode.
+  const [sciLockFailed, setSciLockFailed] = useState(false);
 
   // ponytail: picker visibility. We start by hydrating from localStorage on
   // mount (avoids a flash of the picker when the user has already chosen).
@@ -158,6 +151,39 @@ export default function App() {
     setPickedMode(m);
     calc.setMode(m);
   }, [calc]);
+
+  // ponytail: scientific mode forces landscape (user requirement: "科学模式强制
+  // 横屏"). Other modes call unlock() so the user can rotate freely. If the lock
+  // fails (iOS Safari, non-fullscreen desktop), we set sciLockFailed=true so
+  // the rotate hint shows as a fallback. lock() is async and may race mode
+  // changes; we ignore late-arriving results by checking the mode on resolve.
+  useEffect(() => {
+    let cancelled = false;
+    if (calc.state.mode === 'scientific') {
+      setSciLockFailed(false);
+      orientation.lock('landscape').then((ok) => {
+        if (!cancelled && !ok) setSciLockFailed(true);
+      });
+    } else {
+      setSciLockFailed(false);
+      orientation.unlock();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [calc.state.mode, orientation]);
+
+  // ponytail: exit-to-picker handler. Clears localStorage so the picker shows
+  // on next boot too (user-initiated "switch calculator" should persist).
+  const onExitToPicker = useCallback(() => {
+    try {
+      localStorage.removeItem(LAST_PICK_KEY);
+    } catch {
+      // private mode
+    }
+    orientation.unlock();
+    setPickedMode(null);
+  }, [orientation]);
 
   const showPicker = pickedMode === null;
 
@@ -321,6 +347,20 @@ export default function App() {
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--s-2)', padding: 'var(--s-3) var(--s-4) var(--s-3) 0' }}>
           <Pill
+            onClick={onExitToPicker}
+            ariaLabel={t('common.home')}
+            testId="exit-to-picker"
+          >
+            <span aria-hidden style={{ fontSize: 16 }}>{'\u2302'}</span>
+          </Pill>
+          <Pill
+            onClick={() => void orientation.toggle()}
+            ariaLabel={t('common.rotate')}
+            testId="toggle-orientation"
+          >
+            <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
+          </Pill>
+          <Pill
             onClick={toggleLocale}
             ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
             testId="toggle-locale"
@@ -346,7 +386,7 @@ export default function App() {
           </Pill>
         </div>
       </div>
-      {calc.state.mode === 'scientific' && tier === 'phone' && isPortrait && (
+      {calc.state.mode === 'scientific' && sciLockFailed && (
         <div
           style={{
             textAlign: 'center',

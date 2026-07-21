@@ -21,6 +21,8 @@ export const en: Record<string, string> = {
   'common.close': 'Close',
   'common.back': 'Back',
   'common.clear': 'Clear',
+  'common.home': 'Back to calculator picker',
+  'common.rotate': 'Toggle screen orientation',
 
   // Picker (home)
   'picker.title': 'Choose a calculator',

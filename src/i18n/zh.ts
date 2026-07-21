@@ -20,6 +20,8 @@ export const zh: Record<string, string> = {
   'common.close': '关闭',
   'common.back': '返回',
   'common.clear': '清空',
+  'common.home': '返回主页选择计算器',
+  'common.rotate': '切换屏幕方向',
 
   // Picker (home)
   'picker.title': '选择计算器',
