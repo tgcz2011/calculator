@@ -111,6 +111,25 @@ function isExpressionInputTarget(t: EventTarget | null): boolean {
   );
 }
 
+// ponytail: editable text fields of the non-basic modes (chemistry, advanced,
+// units amount, and the loan/tax/relationship modules). When one of these has
+// focus, the window-level keydown handler must NOT hijack keystrokes - the
+// digit/op/letter routing below calls preventDefault() and shoves the char
+// into the basic calculator via calc.insert(), which eats the typed character
+// (Tester repro: type() into chemistry/advanced inputs dropped digits and
+// operators; fill() hid it because it sets value directly).
+//
+// The basic calculator's Expression input is readOnly and deliberately relies
+// on this handler routing through calc.insert() (it can't accept native
+// typing), so it's excluded here and keeps its existing TGC-20 behavior -
+// isExpressionInputTarget() still owns its Enter/Backspace/Escape skipping.
+function isEditableFieldTarget(t: EventTarget | null): boolean {
+  if (t instanceof HTMLInputElement) {
+    return t.getAttribute('aria-label') !== 'Expression';
+  }
+  return t instanceof HTMLTextAreaElement;
+}
+
 export default function App() {
   const calc = useCalculator();
   const tier = useShellWidth();
@@ -220,6 +239,12 @@ export default function App() {
         }
         return;
       }
+      // ponytail: editable fields of other modes own their keystrokes. Bail
+      // before the routing below so typed chars reach the field natively
+      // instead of being preventDefault()'d into the basic calculator. The
+      // basic calculator's Expression input is readOnly and excluded by
+      // isEditableFieldTarget, so its TGC-20 handling below is preserved.
+      if (isEditableFieldTarget(e.target)) return;
       // ponytail (TGC-20 hotfix): when the expression input has focus, Display's
       // own onKeyDown handles Enter / Backspace / Cmd+Z / Escape. Skip our
       // window-level handling for those keys so we don't double-dispatch — the

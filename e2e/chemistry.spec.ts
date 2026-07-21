@@ -97,4 +97,25 @@ test.describe('Chemistry balancer', () => {
     await page.getByTestId('chem-balance').click();
     await expect(page.getByTestId('chem-result')).toHaveAttribute('data-error-code', 'AMBIGUOUS');
   });
+
+  // ponytail: regression for the global keydown hijack (TGC-22). The window-
+  // level handleKey used to preventDefault() digits/operators/letters and route
+  // them into the basic calculator via calc.insert(), so typing into the
+  // chemistry input with real keystrokes dropped chars. fill() hid it because
+  // it sets value directly. type() exposes it. The fix bails in handleKey when
+  // an editable non-Expression field has focus.
+  test('typing into the chemistry input with real keystrokes is not hijacked', async ({ page }) => {
+    const input = page.getByTestId('chem-input');
+    await input.click();
+    await input.focus();
+    await page.keyboard.type('H2 + O2 -> H2O');
+    await expect(input).toHaveValue('H2 + O2 -> H2O');
+  });
+
+  test('typing digits and operators into the chemistry input is preserved', async ({ page }) => {
+    const input = page.getByTestId('chem-input');
+    await input.click();
+    await page.keyboard.type('Ca(OH)2 + 2 HCl = CaCl2 + 2 H2O');
+    await expect(input).toHaveValue('Ca(OH)2 + 2 HCl = CaCl2 + 2 H2O');
+  });
 });
