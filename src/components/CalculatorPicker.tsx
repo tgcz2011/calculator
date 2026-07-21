@@ -68,6 +68,28 @@ const TILES: CalculatorTileDef[] = [
     glyph: '\u{1F4D0}',
     enabled: true,
   },
+  // ponytail (TGC-22): loan / tax / kin calculators — each gets its own tile.
+  {
+    mode: 'loan',
+    titleKey: 'picker.tile.loan.title',
+    descKey: 'picker.tile.loan.desc',
+    glyph: '\u{1F3E6}',
+    enabled: true,
+  },
+  {
+    mode: 'tax',
+    titleKey: 'picker.tile.tax.title',
+    descKey: 'picker.tile.tax.desc',
+    glyph: '\u{1F4B0}',
+    enabled: true,
+  },
+  {
+    mode: 'kin',
+    titleKey: 'picker.tile.kin.title',
+    descKey: 'picker.tile.kin.desc',
+    glyph: '\u{1F46B}',
+    enabled: true,
+  },
   // ponytail: History is intentionally NOT a picker tile — it's a view of
   // past calculations, not a calculator itself. Picking it as the entry
   // point would land the user on an empty-state screen with no history.
@@ -136,20 +158,17 @@ const headerStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 'var(--s-1)',
 };
-
 const titleStyle: CSSProperties = {
   fontSize: 28,
   fontWeight: 700,
   letterSpacing: '-0.02em',
   margin: 0,
 };
-
 const subtitleStyle: CSSProperties = {
   fontSize: 14,
   color: 'var(--text-tertiary)',
   margin: 0,
 };
-
 const listStyle: CSSProperties = {
   listStyle: 'none',
   margin: 0,
@@ -158,7 +177,6 @@ const listStyle: CSSProperties = {
   flexDirection: 'column',
   gap: 'var(--s-3)',
 };
-
 const tileStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -174,7 +192,6 @@ const tileStyle: CSSProperties = {
   color: 'inherit',
   transition: 'transform var(--dur-fast) var(--ease-standard)',
 };
-
 const glyphStyle: CSSProperties = {
   fontSize: 36,
   lineHeight: 1,
@@ -187,7 +204,6 @@ const glyphStyle: CSSProperties = {
   background: 'var(--accent-soft)',
   borderRadius: 'var(--radius-md)',
 };
-
 const bodyStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -195,17 +211,14 @@ const bodyStyle: CSSProperties = {
   flex: 1,
   minWidth: 0,
 };
-
 const titleStyle2: CSSProperties = {
   fontSize: 17,
   fontWeight: 600,
 };
-
 const descStyle: CSSProperties = {
   fontSize: 13,
   color: 'var(--text-tertiary)',
 };
-
 const badgeStyle: CSSProperties = {
   fontSize: 11,
   fontWeight: 600,

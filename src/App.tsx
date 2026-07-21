@@ -9,6 +9,9 @@ import { Units } from './components/Units';
 import { Programmer } from './components/Programmer';
 import { ChemBalancer } from './components/ChemBalancer';
 import { AdvancedMath } from './components/AdvancedMath';
+import { Loan } from './components/Loan';
+import { Tax } from './components/Tax';
+import { Kin } from './components/Kin';
 import { CalculatorPicker } from './components/CalculatorPicker';
 import { Pill } from './components/Panel';
 import { useCalculator, type Mode } from './state/useCalculator';
@@ -477,7 +480,7 @@ export default function App() {
           {t('app.hint.rotate.tap')}
         </button>
       )}
-      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && (
+      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && calc.state.mode !== 'loan' && calc.state.mode !== 'tax' && calc.state.mode !== 'kin' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
             expression={calc.state.expression}
@@ -514,6 +517,12 @@ export default function App() {
         <ChemBalancer />
       ) : calc.state.mode === 'advanced' ? (
         <AdvancedMath />
+      ) : calc.state.mode === 'loan' ? (
+        <Loan />
+      ) : calc.state.mode === 'tax' ? (
+        <Tax />
+      ) : calc.state.mode === 'kin' ? (
+        <Kin />
       ) : (
         <Keypad
           scientific={calc.state.mode === 'scientific'}

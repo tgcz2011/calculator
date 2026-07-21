@@ -1,16 +1,21 @@
 // Units + currency mode. One amount input + From/To dropdowns per category.
 // Category tabs across the top. Currency sub-view shows the snapshot timestamp
-// prominently so users know rates aren't live.
+// + source prominently so users know which feed (live API / cache / bundled)
+// the rates came from. A "refresh" button triggers fetchLiveRates().
 //
 // ponytail: one input + two dropdowns + display, instead of two inputs the user
 // has to retype. Tap swap to flip from/to. Inputs are controlled; result
 // recomputes on every change (cheap, math.js unit math is <1ms).
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import {
   CATEGORIES,
-  CURRENCY_UPDATED_AT,
+  getCurrencyUpdatedAt,
+  getCurrencySource,
   convertUnits,
+  fetchLiveRates,
+  formatStamp,
+  sourceLabel,
   type CategoryDef,
   type UnitDef,
 } from '../units/engine';
@@ -26,6 +31,32 @@ export function Units() {
   const [amount, setAmount] = useState('1');
   const [from, setFrom] = useState<string>('km');
   const [to, setTo] = useState<string>('m');
+  // ponytail (TGC-22, module 1): live rates. State lives here, not in the
+  // engine, because the engine has no React reactivity. Bumping `ratesTick`
+  // after setLiveRates() forces the UnitsResult memo to re-run against the
+  // updated CURRENCY_RATES reference.
+  const [ratesTick, setRatesTick] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshErr, setRefreshErr] = useState('');
+
+  // ponytail: kick off a live fetch when the user opens the currency tab.
+  // Silent (no spinner) if the in-memory or LocalStorage cache is fresh; only
+  // shows the refresh button if a network round-trip actually happens.
+  useEffect(() => {
+    if (categoryId !== 'currency') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await fetchLiveRates(false);
+        if (!cancelled) setRatesTick((t) => t + 1);
+      } catch {
+        // network error — already falls back to cache / bundled inside the engine
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [categoryId]);
 
   const category = useMemo(
     () => CATEGORIES.find((c) => c.id === categoryId) ?? CATEGORIES[0],
@@ -47,10 +78,29 @@ export function Units() {
     setTo(from);
   }
 
-  const result = useMemo(
-    () => convertUnits(amount, category, from, to),
-    [amount, category, from, to],
-  );
+  // The `void ratesTick` keeps the memo dependency list honest so changing the
+  // rates forces a re-eval. Without it the memo would only re-run when amount /
+  // from / to change, and stale rates would stay cached on screen.
+  const result = useMemo(() => {
+    void ratesTick;
+    return convertUnits(amount, category, from, to);
+  }, [amount, category, from, to, ratesTick]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    setRefreshErr('');
+    try {
+      const payload = await fetchLiveRates(true);
+      setRatesTick((t) => t + 1);
+      if (payload.source === 'cache' || payload.source === 'bundled') {
+        setRefreshErr(t('units.currency.refreshOffline'));
+      }
+    } catch (e) {
+      setRefreshErr(t('units.currency.refreshError'));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return (
     <div
@@ -73,8 +123,31 @@ export function Units() {
       </ChipSegment>
 
       {category.id === 'currency' && (
-        <div style={stampStyle} data-testid="currency-snapshot">
-          {t('units.currency.snapshot', { date: formatStamp(CURRENCY_UPDATED_AT) })}
+        <div style={stampRowStyle} data-testid="currency-snapshot">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+              {t('units.currency.snapshot', { date: formatStamp(getCurrencyUpdatedAt()) })}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }} data-testid="currency-source">
+              {t('units.currency.source', { source: sourceLabel(getCurrencySource()) })}
+            </span>
+            {refreshErr && (
+              <span style={{ fontSize: 11, color: 'var(--danger)' }} data-testid="currency-refresh-error">
+                {refreshErr}
+              </span>
+            )}
+          </div>
+          <Pill
+            size="md"
+            onClick={onRefresh}
+            ariaLabel={t('units.currency.refresh')}
+            testId="currency-refresh"
+          >
+            <span aria-hidden style={{ fontSize: 14, opacity: refreshing ? 0.5 : 1 }}>
+              {refreshing ? '⌛︎' : '\u21BB'}
+            </span>
+            <span>{t('units.currency.refresh')}</span>
+          </Pill>
         </div>
       )}
 
@@ -218,17 +291,12 @@ function ResultCard({
   );
 }
 
-function formatStamp(iso: string): string {
-  if (!iso) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  return `${m[1]}-${m[2]}-${m[3]}`;
-}
-
-const stampStyle: CSSProperties = {
+const stampRowStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--s-2)',
   fontSize: 12,
   color: 'var(--text-tertiary)',
-  textAlign: 'center',
   padding: 'var(--s-1) var(--s-2)',
 };
 
