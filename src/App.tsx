@@ -59,6 +59,31 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
 // preference (skip picker) or let it clear (force picker).
 const LAST_PICK_KEY = 'calc:last-pick';
 
+// ponytail: desktop aspect-ratio lock persistence. When on, the desktop
+// shell keeps a 9/16 phone-like aspect ratio so resizing the window
+// doesn't deform the calculator. Default: ON for desktop tier, OFF for
+// mobile/tablet (where the shell already fills the screen).
+const ASPECT_LOCK_KEY = 'calc:aspect-locked';
+
+function readAspectLocked(): boolean | null {
+  try {
+    const v = localStorage.getItem(ASPECT_LOCK_KEY);
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+  } catch {
+    // private mode
+  }
+  return null;
+}
+
+function writeAspectLocked(locked: boolean): void {
+  try {
+    localStorage.setItem(ASPECT_LOCK_KEY, String(locked));
+  } catch {
+    // private mode
+  }
+}
+
 // ponytail: a-z / A-Z -> self map. Hoisted to module scope so handleKey
 // doesn't rebuild it on every keydown. Lets users type identifiers
 // (foo+1 -> UNKNOWN_SYMBOL) and unknown functions (xyz(1) -> NOT_FUNCTION).
@@ -120,6 +145,22 @@ export default function App() {
   // succeeded — if it failed (iOS Safari, non-fullscreen desktop), show a
   // dismissible hint instead. Cleared when leaving scientific mode.
   const [sciLockFailed, setSciLockFailed] = useState(false);
+  // ponytail: desktop aspect-ratio lock. Hydrate from localStorage; if unset,
+  // default ON for desktop tier, OFF for tablet/phone. We re-read tier here
+  // (not via useEffect) so the initial render matches the user's last choice
+  // instead of flashing the freeform layout first.
+  const [aspectLocked, setAspectLocked] = useState<boolean>(() => {
+    const stored = readAspectLocked();
+    if (stored !== null) return stored;
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
+      return true;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    writeAspectLocked(aspectLocked);
+  }, [aspectLocked]);
 
   // ponytail: picker visibility. We start by hydrating from localStorage on
   // mount (avoids a flash of the picker when the user has already chosen).
@@ -146,32 +187,68 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickedMode]);
 
-  const onPick = useCallback((m: Mode) => {
-    writeLastPick(m);
-    setPickedMode(m);
-    calc.setMode(m);
-  }, [calc]);
-
-  // ponytail: scientific mode forces landscape (user requirement: "科学模式强制
-  // 横屏"). Other modes call unlock() so the user can rotate freely. If the lock
-  // fails (iOS Safari, non-fullscreen desktop), we set sciLockFailed=true so
-  // the rotate hint shows as a fallback. lock() is async and may race mode
-  // changes; we ignore late-arriving results by checking the mode on resolve.
-  useEffect(() => {
-    let cancelled = false;
-    if (calc.state.mode === 'scientific') {
+  // ponytail: apply orientation for a mode. Scientific -> lock('landscape');
+  // others -> unlock(). On desktop (non-rotatable display) we skip the lock
+  // attempt entirely — desktop is always landscape, so lock() would just
+  // throw NotSupportedError and show a misleading hint. On mobile web the
+  // lock runs in the caller's gesture context (click handler) so fullscreen
+  // requests succeed. If the lock fails (iOS Safari, denied fullscreen), we
+  // flip sciLockFailed so the rotate hint shows as a fallback.
+  const applyOrientationForMode = useCallback((m: Mode) => {
+    if (m === 'scientific') {
+      if (isDesktop) {
+        // Desktop monitors can't rotate — skip the no-op lock attempt and
+        // skip the hint (desktop is already landscape).
+        setSciLockFailed(false);
+        return;
+      }
       setSciLockFailed(false);
       orientation.lock('landscape').then((ok) => {
-        if (!cancelled && !ok) setSciLockFailed(true);
+        if (!ok) setSciLockFailed(true);
       });
     } else {
       setSciLockFailed(false);
       orientation.unlock();
     }
-    return () => {
-      cancelled = true;
-    };
-  }, [calc.state.mode, orientation]);
+  }, [orientation]);
+
+  const onPick = useCallback((m: Mode) => {
+    writeLastPick(m);
+    setPickedMode(m);
+    calc.setMode(m);
+    // ponytail: call lock() synchronously inside the click handler's task so
+    // the user-gesture context propagates to requestFullscreen() (which
+    // screen.orientation.lock() needs on mobile web). Calling from useEffect
+    // loses the gesture, so mobile Chrome silently fails to enter fullscreen.
+    applyOrientationForMode(m);
+  }, [calc, applyOrientationForMode]);
+
+  // ponytail: boot hydration path. When pickedMode is restored from
+  // localStorage on reload, apply the orientation for that mode. This runs
+  // outside a user gesture, so on mobile web the lock will likely fail and
+  // the hint will show — that's OK, the user can tap it to retry with
+  // gesture context.
+  useEffect(() => {
+    if (pickedMode) applyOrientationForMode(pickedMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedMode]);
+
+  // ponytail: wrap calc.setMode so the orientation lock fires synchronously
+  // inside the TabBar chip's click handler (preserves user gesture for
+  // requestFullscreen on mobile web).
+  const handleModeChange = useCallback((m: Mode) => {
+    calc.setMode(m);
+    applyOrientationForMode(m);
+  }, [calc, applyOrientationForMode]);
+
+  // ponytail: retry the orientation lock when the user taps the rotate hint.
+  // This runs inside the click handler so the gesture propagates.
+  const onRotateHintTap = useCallback(() => {
+    setSciLockFailed(false);
+    orientation.lock('landscape').then((ok) => {
+      if (!ok) setSciLockFailed(true);
+    });
+  }, [orientation]);
 
   // ponytail: exit-to-picker handler. Clears localStorage so the picker shows
   // on next boot too (user-initiated "switch calculator" should persist).
@@ -280,6 +357,7 @@ export default function App() {
       <main
         className="shell"
         data-tier={tier}
+        data-aspect={aspectLocked ? 'locked' : 'auto'}
         data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
       >
         <div
@@ -291,6 +369,15 @@ export default function App() {
             padding: 'var(--s-3) var(--s-4)',
           }}
         >
+          {tier === 'desktop' && (
+            <Pill
+              onClick={() => setAspectLocked((v) => !v)}
+              ariaLabel={aspectLocked ? t('common.aspect.unlock') : t('common.aspect.lock')}
+              testId="toggle-aspect"
+            >
+              <span aria-hidden style={{ fontSize: 16 }}>{aspectLocked ? '\u{1F512}' : '\u{1F513}'}</span>
+            </Pill>
+          )}
           <Pill
             onClick={toggleLocale}
             ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
@@ -324,6 +411,7 @@ export default function App() {
     <main
       className="shell"
       data-tier={tier}
+      data-aspect={aspectLocked ? 'locked' : 'auto'}
       data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
     >
       <div
@@ -340,7 +428,7 @@ export default function App() {
           <TabBar
             mode={calc.state.mode}
             angle={calc.state.angle}
-            onMode={calc.setMode}
+            onMode={handleModeChange}
             onAngle={calc.setAngle}
             t={t}
           />
@@ -353,13 +441,24 @@ export default function App() {
           >
             <span aria-hidden style={{ fontSize: 16 }}>{'\u2302'}</span>
           </Pill>
-          <Pill
-            onClick={() => void orientation.toggle()}
-            ariaLabel={t('common.rotate')}
-            testId="toggle-orientation"
-          >
-            <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
-          </Pill>
+          {!isDesktop && (
+            <Pill
+              onClick={() => void orientation.toggle()}
+              ariaLabel={t('common.rotate')}
+              testId="toggle-orientation"
+            >
+              <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
+            </Pill>
+          )}
+          {tier === 'desktop' && (
+            <Pill
+              onClick={() => setAspectLocked((v) => !v)}
+              ariaLabel={aspectLocked ? t('common.aspect.unlock') : t('common.aspect.lock')}
+              testId="toggle-aspect"
+            >
+              <span aria-hidden style={{ fontSize: 16 }}>{aspectLocked ? '\u{1F512}' : '\u{1F513}'}</span>
+            </Pill>
+          )}
           <Pill
             onClick={toggleLocale}
             ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
@@ -387,20 +486,27 @@ export default function App() {
         </div>
       </div>
       {calc.state.mode === 'scientific' && sciLockFailed && (
-        <div
+        <button
+          type="button"
+          onClick={onRotateHintTap}
           style={{
+            display: 'block',
+            width: 'calc(100% - var(--s-6))',
             textAlign: 'center',
-            padding: 'var(--s-1) var(--s-3)',
-            color: 'var(--text-tertiary)',
+            padding: 'var(--s-2) var(--s-3)',
+            color: 'var(--accent)',
             fontSize: 12,
-            background: 'var(--bg-elevated)',
+            fontWeight: 600,
+            background: 'var(--accent-soft)',
             borderRadius: 'var(--radius-sm)',
             margin: '0 var(--s-3) var(--s-1)',
+            border: 0,
+            cursor: 'pointer',
           }}
           data-testid="rotate-hint"
         >
-          {t('app.hint.rotate')}
-        </div>
+          {t('app.hint.rotate.tap')}
+        </button>
       )}
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && (
         <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>

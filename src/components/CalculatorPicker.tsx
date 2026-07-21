@@ -30,10 +30,38 @@ const TILES: CalculatorTileDef[] = [
     glyph: '\u{1F4F1}',
     enabled: true,
   },
-  // ponytail: forward-looking slots. The contract surfaces them so the
-  // picker is the single source of truth for "what calculators exist".
-  // Each enabled flag flips independently — we don't ship the gated
-  // tiles' calculators here, only their placeholders.
+  {
+    mode: 'scientific',
+    titleKey: 'picker.tile.scientific.title',
+    descKey: 'picker.tile.scientific.desc',
+    glyph: '\u{1F9EE}',
+    enabled: true,
+  },
+  {
+    mode: 'programmer',
+    titleKey: 'picker.tile.programmer.title',
+    descKey: 'picker.tile.programmer.desc',
+    glyph: '\u{1F4BB}',
+    enabled: true,
+  },
+  {
+    mode: 'units',
+    titleKey: 'picker.tile.units.title',
+    descKey: 'picker.tile.units.desc',
+    glyph: '\u{1F4CF}',
+    enabled: true,
+  },
+  {
+    mode: 'date',
+    titleKey: 'picker.tile.date.title',
+    descKey: 'picker.tile.date.desc',
+    glyph: '\u{1F4C5}',
+    enabled: true,
+  },
+  // ponytail: History is intentionally NOT a picker tile — it's a view of
+  // past calculations, not a calculator itself. Picking it as the entry
+  // point would land the user on an empty-state screen with no history.
+  // Reach History via the TabBar at the top of any calculator instead.
 ];
 
 interface Props {

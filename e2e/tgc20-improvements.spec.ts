@@ -70,15 +70,34 @@ test.describe('Calculator picker (item 2)', () => {
     await expect(page.getByRole('button', { name: 'Open parenthesis' })).toBeVisible();
   });
 
-  test('picker renders only Basic as enabled', async ({ page }) => {
+  test('picker renders all five calculator tiles enabled (basic/scientific/programmer/units/date)', async ({ page }) => {
     await clearPickerPref(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     const tiles = page.locator('[data-testid^="picker-tile-"]');
     const count = await tiles.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    // ponytail: 5 tiles — basic, scientific, programmer, units, date.
+    // History is intentionally NOT a picker tile (it's a view, not a calculator).
+    expect(count).toBe(5);
     const enabled = await page.locator('[data-testid^="picker-tile-"][data-enabled="true"]').count();
-    expect(enabled).toBeGreaterThanOrEqual(1);
+    expect(enabled).toBe(5);
+    // Verify each tile is present by testid.
+    for (const m of ['basic', 'scientific', 'programmer', 'units', 'date']) {
+      await expect(page.getByTestId(`picker-tile-${m}`)).toBeVisible();
+    }
+  });
+
+  test('picking Scientific tile enters scientific mode and persists choice', async ({ page }) => {
+    await clearPickerPref(page);
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('picker-tile-scientific').click();
+    await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
+    const stored = await page.evaluate(() => localStorage.getItem('calc:last-pick'));
+    expect(stored).toBe('scientific');
+    // Scientific keypad renders the scientific function grid (sin / cos / etc.)
+    // Use exact: true because "Cosine" contains "Sine" as a substring.
+    await expect(page.getByRole('button', { name: 'Sine', exact: true })).toBeVisible();
   });
 });
 

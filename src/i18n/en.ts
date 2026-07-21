@@ -23,10 +23,13 @@ export const en: Record<string, string> = {
   'common.clear': 'Clear',
   'common.home': 'Back to calculator picker',
   'common.rotate': 'Toggle screen orientation',
+  'common.aspect.lock': 'Lock aspect ratio',
+  'common.aspect.unlock': 'Unlock aspect ratio',
+  'app.hint.rotate.tap': 'Tap here for landscape · expands scientific functions',
 
   // Picker (home)
   'picker.title': 'Choose a calculator',
-  'picker.subtitle': 'Pick one to get started — more on the way',
+  'picker.subtitle': 'Pick one to get started',
   'picker.tile.basic.title': 'Basic',
   'picker.tile.basic.desc': 'Everyday arithmetic',
   'picker.tile.scientific.title': 'Scientific',

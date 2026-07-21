@@ -336,6 +336,24 @@ textarea:focus-visible {
   }
 }
 
+/* ponytail: desktop aspect-ratio lock. When [data-aspect='locked'], the
+   shell keeps a phone-like 9/16 aspect ratio so resizing the browser
+   window doesn't deform the calculator (tall+thin or short+wide). The
+   shell scales down to fit both width and height constraints; CSS
+   aspect-ratio + max-width/height let the browser pick the binding edge.
+   Only applies at >=1024px (desktop tier) — on phone/tablet the shell
+   already fills the viewport, so locking would be redundant. */
+@media (min-width: 1024px) {
+  .shell[data-aspect='locked'] {
+    aspect-ratio: 9 / 16;
+    height: auto;
+    max-height: calc(100% - var(--s-12));
+    /* Width is derived from height via aspect-ratio, but still cap at 480px
+       so ultra-tall windows don't blow up the shell width. */
+    max-width: 480px;
+  }
+}
+
 /* === Shared framework components ===
    These CSS hooks are owned by src/components/{Key,Chip,Panel,Field}.tsx.
    Rules here are framework-level (touch-targets, press states) - component
