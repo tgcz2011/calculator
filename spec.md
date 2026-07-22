@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-22 · Version: 0.1.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped.
+Last updated: 2026-07-22 · Version: 0.2.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped.
 
 ---
 
@@ -118,6 +118,17 @@ Last updated: 2026-07-22 · Version: 0.1.0.0 · Status: 9 requested modules ship
 - **#7 横屏显示区被遮挡**：landscape 下 scientific 键盘 8 行 + toolbar 超出短视口高度；display-area 原内联 `minHeight:0` 让 flex 把它压到 0px（实测 iPhone13 landscape scientific 显示区 = 0px）。根因修复：`.display-area` 默认 `min-height:0`，但在 `@media (orientation:landscape) and (max-height:500px)` 下 `min-height:22vh`、在 `[data-force-landscape='true']` 下 `min-height:22vw`（旋转后高度=物理宽度，故用 vw 镜像 vh）。键盘本就 `overflow:auto`，现在改为内部滚动而非吃掉显示区。
 - **#8 电脑端长宽比锁**：两处根因。① CSS 数学错：旧规则 `width:100%`+`max-width:480`+`aspect-ratio`+`max-height`，当 `max-height` 封顶高度时 `aspect-ratio` 无法回缩**显式 width**，比例漂到 ~0.64（实测 1200×800 下 480×752=0.638，应为 0.5625）。修复：`width: min(480px, calc((100vh - var(--s-12)) * 9 / 16))`，width 与 max-height 同锚 `(100vh - s-12)`，故 width/max-height 恒为 9/16。② 门槛错：desktop 列 + 锁定原用 `@media (min-width:1024px)` / `tier==='desktop'`，但 Tauri Mac 默认窗口 420×720 永远 <1024 -> 锁与 Pill 都不出现。修复：改用 shell 属性 `data-desktop = isTauri || tier==='desktop'` 驱动（Tauri 任意宽度都算桌面），`aspectLocked` 默认 ON 也含 `isTauri`。
 
+### 2.12 TGC-26 #4 rotate button root fix（↻ 驱动 CSS，不挂死的 Screen Orientation API）
+- **根因**：`↻` 旋转按钮的 onClick 在非桌面分支调 `orientation.toggle()` -> `screen.orientation.lock()`，而该 API 在 iOS Safari 完全不存在、在其它移动 web 需 fullscreen（常被拒），所以在 web 上是 no-op--用户点 ↻ 没反应（"rotate键不生效"）。§2.11 #6 已为 scientific 的**自动**横屏改用 CSS 旋转，但那个修复没覆盖到**手动** ↻ 按钮，按钮仍挂在死的 API 上。桌面分支另用 `isDesktop`（`platform.ts` 静态常量，768px 门槛、模块加载时算一次）而非 `dataDesktop`（`isTauri || tier==='desktop'`，1024px、响应式），与 aspect CSS 的 gate（`.shell[data-desktop='true']`）不一致：768-1023px 窗口下 `isDesktop=true` 翻了 `aspectLocked` 状态但 `dataDesktop=false` CSS 不应，视觉无变化。
+- **修复**：① 非桌面 web 分支改为 toggle `rotated` 状态（驱动 `[data-force-landscape]` CSS 旋转），不再调死的 `orientation.toggle()`；进入 scientific 在 phone 上 auto-set `rotated=true`（保留 TGC-24 #6 自动横屏），↻ 按钮可手动覆盖任意模式。② 桌面分支 gate 从 `isDesktop` 改为 `dataDesktop`（与 aspect CSS 同锚、响应式）。③ native 移动仍用真 `orientation.toggle()`（Capacitor 上可用）。④ 删掉死的 `sciLockFailed` + "tap here for landscape" hint（它重试一个永远失败的 lock，是症状补丁；force-landscape CSS 现在恒生效，hint 永不显示）。
+- **force-landscape 单一状态**：`forceLandscape = !showPicker && !isDesktop && tier==='phone' && rotated && orientation.orientation==='portrait'`。`rotated` 是用户/应用的旋转请求：scientific 进入时 auto-set、↻ 按钮手动 toggle、退出 picker / 切非 scientific 时清零。物理横屏时 `orientation==='landscape'` 让 forceLandscape 自动关（避免 native 真 lock + CSS 双重旋转）。
+
+### 2.13 TGC-26 calculator isolation and input polish
+- Narrow-view toolbars wrap all controls onto visible rows instead of hiding controls behind an undiscoverable scrollbar.
+- Basic/scientific expression and result stay adjacent; the result no longer uses an auto margin that creates empty vertical space.
+- Chemistry input uses three switchable touch-keyboard pages: digits, the complete Latin alphabet, and parser-supported symbols including grouping, hydrate, charge, reaction, and equilibrium tokens.
+- Calculator components remain mounted while switching modes so each calculator keeps its own temporary input. Basic/scientific reducer drafts and history views are scoped by calculator; legacy unscoped history belongs to Basic.
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）
@@ -181,6 +192,10 @@ Last updated: 2026-07-22 · Version: 0.1.0.0 · Status: 9 requested modules ship
 ### 3.14 flex 子项 `min-height:0` 在短视口会压塌显示区
 - **坑**：竖排 flex 容器里 display-area 用 `flex:1; minHeight:0` 让它可缩；landscape 短视口下 scientific 键盘 8 行自然高 > 视口，flex 把 display-area 压到 0px（实测 0px），显示区被完全遮挡。
 - **规约**：可滚动键盘（`overflow:auto`）+ 显示区共存时，给显示区一个视口比例下限（`min-height: 22vh` 物理横屏 / `22vw` CSS 旋转横屏），让键盘在剩余空间内滚动而非吃掉显示区。`minHeight:0` 只在"需要让位给另一个固定高元素"时用，且要确认该元素本身有 floor。
+
+### 3.15 手动旋转按钮不能挂在死的 Screen Orientation API 上
+- **坑**：§2.11 #6 把 scientific 的**自动**横屏改成了 CSS 旋转，但 `↻` 旋转按钮的 onClick 仍调 `orientation.toggle()` -> `screen.orientation.lock()`。该 API 在 iOS Safari 不存在、在其它移动 web 需 fullscreen（常被拒），所以按钮在 web 上是 no-op--用户点 ↻ 没反应（TGC-26 #4 被报"rotate键不生效"）。e2e 只断言按钮存在 + 文案是"↻ 旋转"，不断言点击效果，所以这个死按钮漏过了 645 passed 的回归。
+- **规约**：web 上任何"旋转/横屏"的用户操作都驱动 CSS `[data-force-landscape]`（`rotated` 状态），不要调 `screen.orientation.lock`。native（Capacitor）才用真 lock。桌面旋转按钮的 gate 用 `dataDesktop`（`isTauri || tier==='desktop'`，与 aspect CSS 同锚、响应式），不要用 `platform.ts` 的静态 `isDesktop`（768px 门槛、加载时算一次，会与响应式 CSS 漂移）。e2e 必须断言点击 ↻ 后 `data-force-landscape`/`data-aspect` 翻转，不能只断言按钮存在。
 
 ---
 

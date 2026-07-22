@@ -114,18 +114,36 @@ test.describe('Chemistry balancer', () => {
 
   test('subscript keypad inserts parser-compatible formula tokens at the cursor', async ({ page }) => {
     await expect(page.getByTestId('chem-touch-keyboard')).toBeVisible();
+    await page.getByTestId('chem-keyboard-tab-letters').click();
     await page.getByTestId('chem-key-H').click();
+    await page.getByTestId('chem-keyboard-tab-numbers').click();
     await page.getByTestId('chem-key-2').click();
+    await page.getByTestId('chem-keyboard-tab-symbols').click();
     await page.getByTestId('chem-key-+').click();
+    await page.getByTestId('chem-keyboard-tab-letters').click();
     await page.getByTestId('chem-key-O').click();
+    await page.getByTestId('chem-keyboard-tab-numbers').click();
     await page.getByTestId('chem-key-2').click();
+    await page.getByTestId('chem-keyboard-tab-symbols').click();
     await page.getByTestId('chem-key-->').click();
+    await page.getByTestId('chem-keyboard-tab-letters').click();
     await page.getByTestId('chem-key-H').click();
+    await page.getByTestId('chem-keyboard-tab-numbers').click();
     await page.getByTestId('chem-key-2').click();
+    await page.getByTestId('chem-keyboard-tab-letters').click();
     await page.getByTestId('chem-key-O').click();
     await expect(page.getByTestId('chem-input')).toHaveValue('H2 + O2 -> H2O');
     await page.getByTestId('chem-balance').click();
     await expect(page.getByTestId('chem-equation')).toBeVisible();
+  });
+
+  test('chemistry draft survives switching to another calculator and back', async ({ page }) => {
+    await page.getByTestId('chem-input').fill('KMnO4 + HCl');
+    await page.getByTestId('exit-to-picker').click();
+    await page.getByTestId('picker-tile-basic').click();
+    await page.getByTestId('exit-to-picker').click();
+    await page.getByTestId('picker-tile-chemistry').click();
+    await expect(page.getByTestId('chem-input')).toHaveValue('KMnO4 + HCl');
   });
 
   test('typing digits and operators into the chemistry input is preserved', async ({ page }) => {

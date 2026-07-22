@@ -49,22 +49,22 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
   return tier;
 }
 
-// ponytail: scientific mode forces landscape (useOrientation.lock). On iOS
-// Safari the Screen Orientation API is unsupported — there, lock() returns
-// false and the App shows a dismissible rotate hint instead. The rotate hint
-// is gated on lockFailed so it only appears when we couldn't actually lock.
-// Other modes call unlock() so the user can rotate freely; a top-bar rotate
-// Pill lets the user manually flip orientation in any mode.
+// ponytail (TGC-26 #4 root fix): the ↻ (rotate) button and force-landscape.
+// The Screen Orientation API is dead on web (no lock() on iOS Safari; needs
+// fullscreen elsewhere, usually denied), so the old ↻ button that called
+// orientation.toggle() was a no-op on web - "rotate键不生效". The root fix
+// drives CSS rotation directly: a `rotated` state toggles the shell's
+// [data-force-landscape] CSS (90deg rotate, see tokens.css). Entering
+// scientific on a phone auto-sets rotated=true (preserves the TGC-24 #6
+// auto-force-landscape); the ↻ button toggles it so the user can override in
+// any mode. Native mobile still uses the real orientation.lock (works on
+// Capacitor) with CSS as the fallback. Desktop (dataDesktop) has no rotation,
+// so ↻ toggles the 9/16 aspect lock instead (tall shell ↔ wide column).
 //
 // ponytail (TGC-23): the top TabBar (mode chip strip) was removed per user
-// request — the home-page CalculatorPicker is now the only mode selector.
+// request - the home-page CalculatorPicker is now the only mode selector.
 // The angle-mode (DEG/RAD) toggle used to live inside TabBar; it's now a
-// Pill in the right-side toolbar, gated on mode === 'scientific'. The rotate
-// Pill now also renders on desktop (was mobile-only): on mobile it toggles
-// screen.orientation; on desktop screen.orientation is a no-op, so the
-// button is wired to flip the aspect lock instead — same visual effect
-// (tall/portrait shell ↔ wide/landscape column) but driven by the layout
-// instead of the monitor.
+// Pill in the right-side toolbar, gated on mode === 'scientific'.
 
 // ponytail: picker shows on every boot — the user wants the calculator
 // selector as the always-on entry point ("重启后一定要到选择计算器的界面去").
@@ -151,10 +151,16 @@ export default function App() {
   const i18n = useI18n();
   const { t, locale, toggleLocale } = i18n;
   const [syncOpen, setSyncOpen] = useState(false);
-  // ponytail: scientific mode forces landscape. Track whether the lock attempt
-  // succeeded — if it failed (iOS Safari, non-fullscreen desktop), show a
-  // dismissible hint instead. Cleared when leaving scientific mode.
-  const [sciLockFailed, setSciLockFailed] = useState(false);
+  // ponytail (TGC-26 #4): user/app rotation request that drives the CSS
+  // force-landscape on mobile. The ↻ button toggles this on web (the Screen
+  // Orientation API is dead on iOS Safari / non-fullscreen web, so the old
+  // orientation.toggle() button was a no-op there - "rotate键不生效").
+  // Entering scientific on a phone auto-sets this true (preserves the
+  // TGC-24 #6 auto-force-landscape); the ↻ button then lets the user
+  // override it in any mode. Native still attempts the real orientation.lock
+  // first; this is the web primary and the native fallback. See
+  // tokens.css [data-force-landscape].
+  const [rotated, setRotated] = useState(false);
   // ponytail: desktop aspect-ratio lock. Hydrate from localStorage; if unset,
   // default ON for desktop tier, OFF for tablet/phone. We re-read tier here
   // (not via useEffect) so the initial render matches the user's last choice
@@ -183,34 +189,36 @@ export default function App() {
   // in-memory mode; onExitToPicker clears it back to null.
   const [pickedMode, setPickedMode] = useState<Mode | null>(null);
 
-  // ponytail (TGC-25 #6): apply orientation for a mode. Scientific wants
-  // landscape. On desktop (non-rotatable display) we skip the lock - desktop
-  // is always landscape. On mobile WEB we also skip the lock: the Screen
-  // Orientation API is unavailable on iOS Safari and requires fullscreen
-  // (often denied) elsewhere, so lock() always fails and the old "tap here
-  // for landscape" hint did nothing. Instead the App renders a CSS-rotated
-  // shell (forceLandscape) so the scientific calculator appears in landscape
-  // regardless of the API - see tokens.css [data-force-landscape]. Native
-  // apps still attempt the real orientation.lock (it works there); if it
-  // fails, forceLandscape also kicks in as a fallback.
+  // ponytail (TGC-26 #4 root fix): apply orientation for a mode. Scientific
+  // wants landscape. Desktop monitors don't rotate, so skip. Mobile WEB sets
+  // `rotated` true so the shell CSS-rotates to landscape (the Screen
+  // Orientation API is dead on iOS Safari / non-fullscreen web - the old
+  // lock+hint path never rotated anything, and the manual ↻ button that
+  // called orientation.toggle() was a no-op too). Native mobile still
+  // attempts the real orientation.lock (works on Capacitor); if it fails,
+  // `rotated` kicks in as the CSS fallback. Non-scientific modes clear
+  // `rotated` and release any native lock. The ↻ button also toggles
+  // `rotated` on web, so the user can manually rotate/override in any mode.
   const applyOrientationForMode = useCallback((m: Mode) => {
     if (m === 'scientific') {
       if (isDesktop) {
-        setSciLockFailed(false);
+        // Desktop is always landscape; no rotation needed.
         return;
       }
       if (isWeb) {
-        // CSS force-landscape handles web; no fullscreen/lock attempt.
-        setSciLockFailed(false);
+        // CSS force-landscape is the primary mechanism on web.
+        setRotated(true);
         return;
       }
-      // Native mobile: attempt the real orientation lock.
-      setSciLockFailed(false);
+      // Native mobile: attempt the real lock first; fall back to CSS only if
+      // it fails. Don't set rotated upfront to avoid a rotate-then-unrotate
+      // flash while the lock is in flight - if it succeeds the device
+      // physically rotates and the portrait-gated forceLandscape stays off.
       orientation.lock('landscape').then((ok) => {
-        if (!ok) setSciLockFailed(true);
+        if (!ok) setRotated(true);
       });
     } else {
-      setSciLockFailed(false);
+      setRotated(false);
       orientation.unlock();
     }
   }, [orientation]);
@@ -218,35 +226,28 @@ export default function App() {
   const onPick = useCallback((m: Mode) => {
     setPickedMode(m);
     calc.setMode(m);
-    // ponytail: call lock() synchronously inside the click handler's task so
-    // the user-gesture context propagates to requestFullscreen() (which
-    // screen.orientation.lock() needs on mobile web). Calling from useEffect
-    // loses the gesture, so mobile Chrome silently fails to enter fullscreen.
+    // ponytail: fire applyOrientationForMode synchronously inside the click
+    // handler. On native mobile this preserves the user-gesture context for
+    // screen.orientation.lock(); on web it just flips `rotated` (no gesture
+    // needed for CSS). Calling from useEffect would lose the native gesture.
     applyOrientationForMode(m);
   }, [calc, applyOrientationForMode]);
 
-  // ponytail: wrap calc.setMode so the orientation lock fires synchronously
-  // inside the picker tile's click handler (preserves user gesture for
-  // requestFullscreen on mobile web). Also injected into useKeyboardExtras
-  // so Ctrl/Cmd+1..6 honors the same lock-on-enter rule (TGC-23 §3.9).
+  // ponytail: wrap calc.setMode so the orientation/rotation fires synchronously
+  // inside the picker tile's click handler (preserves the native user gesture
+  // for orientation.lock). Also injected into useKeyboardExtras so Ctrl/Cmd+1..6
+  // honors the same lock-on-enter rule (TGC-23 §3.9).
   const handleModeChange = useCallback((m: Mode) => {
     calc.setMode(m);
     applyOrientationForMode(m);
   }, [calc, applyOrientationForMode]);
 
-  // ponytail: retry the orientation lock when the user taps the rotate hint.
-  // This runs inside the click handler so the gesture propagates.
-  const onRotateHintTap = useCallback(() => {
-    setSciLockFailed(false);
-    orientation.lock('landscape').then((ok) => {
-      if (!ok) setSciLockFailed(true);
-    });
-  }, [orientation]);
-
-  // ponytail: exit-to-picker handler. Just clears in-memory state — the picker
-  // always shows on next boot anyway (no persistence to clear).
+  // ponytail: exit-to-picker handler. Just clears in-memory state - the picker
+  // always shows on next boot anyway (no persistence to clear). Also clears
+  // any CSS force-landscape so the picker is never rendered rotated.
   const onExitToPicker = useCallback(() => {
     orientation.unlock();
+    setRotated(false);
     setPickedMode(null);
   }, [orientation]);
 
@@ -258,17 +259,20 @@ export default function App() {
   // stay non-desktop (full-bleed shell).
   const dataDesktop = isTauri || tier === 'desktop';
 
-  // ponytail (TGC-25 #6): CSS force-landscape for the scientific calculator
-  // on portrait phones. Only on non-desktop mobile (web + native), phone
-  // tier, physically portrait. Native wins first (real orientation.lock); if
-  // the lock fails orientation stays portrait and this kicks in. On web the
-  // lock is never attempted, so this is the primary mechanism. Turns off the
-  // moment the device is physically rotated to landscape (orientation flips).
+  // ponytail (TGC-26 #4 root fix): CSS force-landscape, driven by `rotated`
+  // (the user/app rotation request) instead of being auto-only for
+  // scientific. Applies on non-desktop phones held in portrait: the shell is
+  // CSS-rotated 90deg (see tokens.css [data-force-landscape]). `rotated` is
+  // auto-set true on entering scientific (TGC-24 #6 auto-force-landscape)
+  // and toggled by the ↻ button on web, so rotation works in any mode, not
+  // just scientific. Turns off the moment the device is physically rotated
+  // to landscape (orientation flips), so a real native lock + CSS never
+  // double-rotate.
   const forceLandscape =
     !showPicker &&
-    calc.state.mode === 'scientific' &&
     !isDesktop &&
     tier === 'phone' &&
+    rotated &&
     orientation.orientation === 'portrait';
   const effectiveOrient: 'landscape' | 'portrait' =
     forceLandscape || orientation.orientation === 'landscape' ? 'landscape' : 'portrait';
@@ -367,6 +371,17 @@ export default function App() {
     return () => s.remove();
   }, []);
 
+  const persistentModes = [
+    <div key="date" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'date'}><DateTime /></div>,
+    <div key="units" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'units'}><Units /></div>,
+    <div key="programmer" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'programmer'}><Programmer /></div>,
+    <div key="chemistry" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'chemistry'}><ChemBalancer /></div>,
+    <div key="advanced" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'advanced'}><AdvancedMath /></div>,
+    <div key="loan" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'loan'}><Loan /></div>,
+    <div key="tax" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'tax'}><Tax /></div>,
+    <div key="kin" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'kin'}><Kin /></div>,
+  ];
+
   if (showPicker) {
     return (
       <main
@@ -411,6 +426,7 @@ export default function App() {
           </Pill>
         </div>
         <CalculatorPicker onPick={onPick} t={t} />
+        {persistentModes}
       </main>
     );
   }
@@ -461,19 +477,26 @@ export default function App() {
         )}
         <Pill
           onClick={() => {
-            // ponytail (TGC-23): mobile flips real screen.orientation; on
-            // desktop the API is a no-op, so the button is wired to flip
-            // the aspect lock instead (same visual: tall portrait shell ↔
-            // wide landscape column). Both call sites share this single
-            // helper so the two pills don't drift apart.
-            if (isDesktop) {
+            // ponytail (TGC-26 #4 root fix): the ↻ button must actually do
+            // something on every platform. The old wiring called the dead
+            // Screen Orientation API on web (no-op on iOS Safari / non-
+            // fullscreen), so the button did nothing - "rotate键不生效".
+            // Desktop (dataDesktop - reactive, matches the aspect CSS gate,
+            // unlike the old static isDesktop which drifted at 768-1023px):
+            // toggle the 9/16 aspect lock (tall shell ↔ wide column). Native
+            // mobile: toggle the real orientation lock (works on Capacitor).
+            // Web non-desktop: toggle CSS force-landscape (rotated), the only
+            // mechanism that actually rotates on web.
+            if (dataDesktop) {
               setAspectLocked((v) => !v);
-            } else {
+            } else if (isMobileNative) {
               void orientation.toggle();
+            } else {
+              setRotated((v) => !v);
             }
           }}
           ariaLabel={
-            isDesktop
+            dataDesktop
               ? (aspectLocked ? t('common.rotate.desktopUnlocked') : t('common.rotate.desktopLocked'))
               : t('common.rotate')
           }
@@ -516,29 +539,6 @@ export default function App() {
           <span>{t('common.sync')}</span>
         </Pill>
       </div>
-      {calc.state.mode === 'scientific' && sciLockFailed && !forceLandscape && (
-        <button
-          type="button"
-          onClick={onRotateHintTap}
-          style={{
-            display: 'block',
-            width: 'calc(100% - var(--s-6))',
-            textAlign: 'center',
-            padding: 'var(--s-2) var(--s-3)',
-            color: 'var(--accent)',
-            fontSize: 12,
-            fontWeight: 600,
-            background: 'var(--accent-soft)',
-            borderRadius: 'var(--radius-sm)',
-            margin: '0 var(--s-3) var(--s-1)',
-            border: 0,
-            cursor: 'pointer',
-          }}
-          data-testid="rotate-hint"
-        >
-          {t('app.hint.rotate.tap')}
-        </button>
-      )}
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && calc.state.mode !== 'loan' && calc.state.mode !== 'tax' && calc.state.mode !== 'kin' && (
         <div className="display-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
@@ -559,30 +559,17 @@ export default function App() {
           />
         </div>
       )}
-      {calc.state.mode === 'history' ? (
+      {calc.state.mode === 'history' && (
         <HistoryList
           bump={calc.state.historyVersion}
+          mode={calc.state.activeCalculator}
           onRecall={calc.recall}
           onClear={calc.clearHistory}
           t={t}
         />
-      ) : calc.state.mode === 'date' ? (
-        <DateTime />
-      ) : calc.state.mode === 'units' ? (
-        <Units />
-      ) : calc.state.mode === 'programmer' ? (
-        <Programmer />
-      ) : calc.state.mode === 'chemistry' ? (
-        <ChemBalancer />
-      ) : calc.state.mode === 'advanced' ? (
-        <AdvancedMath />
-      ) : calc.state.mode === 'loan' ? (
-        <Loan />
-      ) : calc.state.mode === 'tax' ? (
-        <Tax />
-      ) : calc.state.mode === 'kin' ? (
-        <Kin />
-      ) : (
+      )}
+      {persistentModes}
+      {(calc.state.mode === 'basic' || calc.state.mode === 'scientific') && (
         <Keypad
           scientific={calc.state.mode === 'scientific'}
           angle={calc.state.angle}

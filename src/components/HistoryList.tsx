@@ -1,18 +1,33 @@
 import { useMemo } from 'react';
 import { history } from '../history/api';
 
+import type { Mode } from '../state/useCalculator';
+
+const HISTORY_SCOPE_PREFIX = '\u2063calc:';
+
+type CalculatorMode = Exclude<Mode, 'history'>;
+
 interface Props {
   bump: number;
+  mode: CalculatorMode;
   onRecall(expression: string, result: string): void;
   onClear(): void;
   t(key: string): string;
 }
 
-export function HistoryList({ bump, onRecall, onClear, t }: Props) {
+export function HistoryList({ bump, mode, onRecall, onClear, t }: Props) {
   const items = useMemo(() => {
     void bump;
-    return history.list();
-  }, [bump]);
+    return history.list().flatMap((entry) => {
+      if (!entry.expression.startsWith(HISTORY_SCOPE_PREFIX)) {
+        return mode === 'basic' ? [entry] : [];
+      }
+      const prefix = `${HISTORY_SCOPE_PREFIX}${mode}\u2063`;
+      return entry.expression.startsWith(prefix)
+        ? [{ ...entry, expression: entry.expression.slice(prefix.length) }]
+        : [];
+    });
+  }, [bump, mode]);
 
   if (!items.length) {
     return (
