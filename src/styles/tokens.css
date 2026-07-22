@@ -341,33 +341,93 @@ textarea:focus-visible {
   }
 }
 
-@media (min-width: 1024px) {
-  .shell {
-    max-width: 480px;
-    box-shadow: var(--shadow-elevated);
-    border-radius: var(--radius-lg);
-    margin: var(--s-6) auto;
-    height: calc(100% - var(--s-12));
-    overflow: hidden;
-  }
+/* Desktop (Mac/Win/Linux Tauri, or web >=1024px): centered 480px column
+   with elevation + rounded corners - driven by [data-desktop='true']
+   (isTauri || tier==='desktop') instead of a pixel media query, so the
+   default 420px Tauri Mac window gets the desktop column too (TGC-25 #8:
+   the old min-width:1024px gate never engaged on the Mac app). */
+.shell[data-desktop='true'] {
+  max-width: 480px;
+  box-shadow: var(--shadow-elevated);
+  border-radius: var(--radius-lg);
+  margin: var(--s-6) auto;
+  height: calc(100% - var(--s-12));
+  overflow: hidden;
 }
 
-/* ponytail: desktop aspect-ratio lock. When [data-aspect='locked'], the
-   shell keeps a phone-like 9/16 aspect ratio so resizing the browser
-   window doesn't deform the calculator (tall+thin or short+wide). The
-   shell scales down to fit both width and height constraints; CSS
-   aspect-ratio + max-width/height let the browser pick the binding edge.
-   Only applies at >=1024px (desktop tier) — on phone/tablet the shell
-   already fills the viewport, so locking would be redundant. */
-@media (min-width: 1024px) {
-  .shell[data-aspect='locked'] {
-    aspect-ratio: 9 / 16;
-    height: auto;
-    max-height: calc(100% - var(--s-12));
-    /* Width is derived from height via aspect-ratio, but still cap at 480px
-       so ultra-tall windows don't blow up the shell width. */
-    max-width: 480px;
+/* ponytail (TGC-25 #8): desktop aspect-ratio lock. ROOT FIX: the old rule
+   set width:100% + max-width:480 + aspect-ratio + max-height. When
+   max-height capped the height, aspect-ratio couldn't shrink the explicit
+   width, so the box drifted to ~0.64 instead of 0.5625 (verified: 480x752
+   at 1200x800). The fix derives width from the available HEIGHT directly:
+   width = min(480, (100vh - margin) * 9/16). Both width and max-height are
+   anchored to (100vh - s-12), so width/max-height = 9/16 in every case
+   (short window -> height-bound, tall window -> width-bound at 480). */
+.shell[data-desktop='true'][data-aspect='locked'] {
+  aspect-ratio: 9 / 16;
+  height: auto;
+  width: min(480px, calc((100vh - var(--s-12)) * 9 / 16));
+  max-width: 480px;
+  max-height: calc(100% - var(--s-12));
+}
+
+/* ponytail (TGC-25 #7): display-area floor. In landscape the scientific
+   keypad (8 rows) + toolbar can exceed the short viewport height; the
+   display-area had inline minHeight:0 so flex shrank it to 0px (verified:
+   0px on iPhone-13 landscape scientific), making it unusable. Floor it so
+   the keypad (already overflow:auto) scrolls instead of eating the display.
+   vw units under force-landscape mirror the vh units under physical
+   landscape (rotated height = physical width). */
+.display-area {
+  min-height: 0;
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  .display-area {
+    min-height: 22vh;
   }
+}
+.shell[data-force-landscape='true'] .display-area {
+  min-height: 22vw;
+}
+
+/* ponytail (TGC-25 #6): force-landscape for the scientific calculator on
+   portrait phones. screen.orientation.lock() is unavailable on iOS Safari
+   and requires fullscreen (often denied) elsewhere on the web, so the old
+   lock+hint approach never rotated anything and the "tap here for landscape"
+   button did nothing (it retried a lock that always fails). ROOT FIX:
+   rotate the shell 90deg via CSS so it renders in landscape regardless of
+   the Screen Orientation API. The shell becomes a fixed full-viewport
+   layer: width = viewport height, height = viewport width, rotated
+   clockwise about the top-left and translated back to cover the screen
+   (math: point (x,y) -> (H-y, x), mapping the box to exactly 0..100vw x
+   0..100vh). Pointer events are remapped by the browser, so taps land
+   correctly. Native apps still attempt the real orientation.lock first;
+   this CSS is the web behavior and the native fallback when the lock fails.
+   The token set below is vw-based, mirroring the physical-landscape vh
+   set, because the rotated shell's height = physical viewport width.
+   dvh/dvw are used with vh/vw fallback for iOS Safari's dynamic chrome. */
+.shell[data-force-landscape='true'] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vh;
+  width: 100dvh;
+  height: 100vw;
+  height: 100dvw;
+  max-width: none;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+  transform-origin: top left;
+  transform: rotate(90deg) translateY(-100%);
+  z-index: var(--z-modal);
+  --display-fs: clamp(32px, 8vw, 56px);
+  --display-fs-expr: clamp(14px, 3vw, 20px);
+  --key-size: clamp(36px, 10vw, 52px);
+  --key-fs: clamp(13px, 3vw, 18px);
+  --key-size-compact: clamp(30px, 7vw, 40px);
+  --key-fs-compact: clamp(11px, 2.2vw, 14px);
 }
 
 /* === Shared framework components ===

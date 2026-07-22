@@ -19,7 +19,7 @@ import { useKeyboardExtras } from './hooks/useKeyboardExtras';
 import { useTheme } from './hooks/useTheme';
 import { useI18n } from './hooks/useI18n';
 import { useOrientation } from './hooks/useOrientation';
-import { isIOS, isDesktop, isMobileNative, isWeb } from './native/platform';
+import { isIOS, isDesktop, isMobileNative, isWeb, isTauri } from './native/platform';
 
 // ponytail: width breakpoint -> shell width class. Three tiers:
 // phone (<768), tablet (768-1023), desktop (>=1024). Driven by matchMedia so it
@@ -162,6 +162,11 @@ export default function App() {
   const [aspectLocked, setAspectLocked] = useState<boolean>(() => {
     const stored = readAspectLocked();
     if (stored !== null) return stored;
+    // ponytail (TGC-25 #8): default ON for desktop platforms - Tauri at any
+    // window width (the Mac app defaults to 420x720, below the old 1024px
+    // gate) OR web >=1024px. iPad/tablet and phones stay unlocked (the shell
+    // already fills the viewport there).
+    if (isTauri) return true;
     if (typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches) {
       return true;
     }
@@ -178,21 +183,28 @@ export default function App() {
   // in-memory mode; onExitToPicker clears it back to null.
   const [pickedMode, setPickedMode] = useState<Mode | null>(null);
 
-  // ponytail: apply orientation for a mode. Scientific -> lock('landscape');
-  // others -> unlock(). On desktop (non-rotatable display) we skip the lock
-  // attempt entirely — desktop is always landscape, so lock() would just
-  // throw NotSupportedError and show a misleading hint. On mobile web the
-  // lock runs in the caller's gesture context (click handler) so fullscreen
-  // requests succeed. If the lock fails (iOS Safari, denied fullscreen), we
-  // flip sciLockFailed so the rotate hint shows as a fallback.
+  // ponytail (TGC-25 #6): apply orientation for a mode. Scientific wants
+  // landscape. On desktop (non-rotatable display) we skip the lock - desktop
+  // is always landscape. On mobile WEB we also skip the lock: the Screen
+  // Orientation API is unavailable on iOS Safari and requires fullscreen
+  // (often denied) elsewhere, so lock() always fails and the old "tap here
+  // for landscape" hint did nothing. Instead the App renders a CSS-rotated
+  // shell (forceLandscape) so the scientific calculator appears in landscape
+  // regardless of the API - see tokens.css [data-force-landscape]. Native
+  // apps still attempt the real orientation.lock (it works there); if it
+  // fails, forceLandscape also kicks in as a fallback.
   const applyOrientationForMode = useCallback((m: Mode) => {
     if (m === 'scientific') {
       if (isDesktop) {
-        // Desktop monitors can't rotate — skip the no-op lock attempt and
-        // skip the hint (desktop is already landscape).
         setSciLockFailed(false);
         return;
       }
+      if (isWeb) {
+        // CSS force-landscape handles web; no fullscreen/lock attempt.
+        setSciLockFailed(false);
+        return;
+      }
+      // Native mobile: attempt the real orientation lock.
       setSciLockFailed(false);
       orientation.lock('landscape').then((ok) => {
         if (!ok) setSciLockFailed(true);
@@ -239,6 +251,27 @@ export default function App() {
   }, [orientation]);
 
   const showPicker = pickedMode === null;
+
+  // ponytail (TGC-25 #8): desktop-platform flag driving the centered column
+  // + aspect-lock CSS. Tauri at any width (the Mac app window is 420x720,
+  // below the 1024px layout breakpoint) OR web >=1024px. iPad/tablet/phone
+  // stay non-desktop (full-bleed shell).
+  const dataDesktop = isTauri || tier === 'desktop';
+
+  // ponytail (TGC-25 #6): CSS force-landscape for the scientific calculator
+  // on portrait phones. Only on non-desktop mobile (web + native), phone
+  // tier, physically portrait. Native wins first (real orientation.lock); if
+  // the lock fails orientation stays portrait and this kicks in. On web the
+  // lock is never attempted, so this is the primary mechanism. Turns off the
+  // moment the device is physically rotated to landscape (orientation flips).
+  const forceLandscape =
+    !showPicker &&
+    calc.state.mode === 'scientific' &&
+    !isDesktop &&
+    tier === 'phone' &&
+    orientation.orientation === 'portrait';
+  const effectiveOrient: 'landscape' | 'portrait' =
+    forceLandscape || orientation.orientation === 'landscape' ? 'landscape' : 'portrait';
 
   const handleKey = useCallback(
     (e: KeyboardEvent) => {
@@ -339,6 +372,7 @@ export default function App() {
       <main
         className="shell"
         data-tier={tier}
+        data-desktop={dataDesktop ? 'true' : 'false'}
         data-aspect={aspectLocked ? 'locked' : 'auto'}
         data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
       >
@@ -351,7 +385,7 @@ export default function App() {
             padding: 'var(--s-3) var(--s-4)',
           }}
         >
-          {tier === 'desktop' && (
+          {dataDesktop && (
             <Pill
               onClick={() => setAspectLocked((v) => !v)}
               ariaLabel={aspectLocked ? t('common.aspect.unlock') : t('common.aspect.lock')}
@@ -393,7 +427,10 @@ export default function App() {
     <main
       className={`shell${calc.state.mode === 'scientific' ? ' shell--scientific' : ''}`}
       data-tier={tier}
+      data-desktop={dataDesktop ? 'true' : 'false'}
       data-aspect={aspectLocked ? 'locked' : 'auto'}
+      data-orient={effectiveOrient}
+      data-force-landscape={forceLandscape ? 'true' : 'false'}
       data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
     >
       <div
@@ -446,7 +483,7 @@ export default function App() {
         >
           <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
         </Pill>
-        {tier === 'desktop' && (
+        {dataDesktop && (
           <Pill
             onClick={() => setAspectLocked((v) => !v)}
             ariaLabel={aspectLocked ? t('common.aspect.unlock') : t('common.aspect.lock')}
@@ -480,7 +517,7 @@ export default function App() {
           <span>{t('common.sync')}</span>
         </Pill>
       </div>
-      {calc.state.mode === 'scientific' && sciLockFailed && (
+      {calc.state.mode === 'scientific' && sciLockFailed && !forceLandscape && (
         <button
           type="button"
           onClick={onRotateHintTap}
@@ -504,7 +541,7 @@ export default function App() {
         </button>
       )}
       {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && calc.state.mode !== 'loan' && calc.state.mode !== 'tax' && calc.state.mode !== 'kin' && (
-        <div className="display-area" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
+        <div className="display-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
             expression={calc.state.expression}
             result={calc.live}
