@@ -25,6 +25,8 @@ interface State {
   committedErrorCode: string;
   error: string;
   mode: Mode;
+  activeCalculator: Exclude<Mode, 'history'>;
+  drafts: Partial<Record<Exclude<Mode, 'history'>, Snapshot>>;
   angle: AngleMode;
   past: Snapshot[];
   future: Snapshot[];
@@ -61,6 +63,8 @@ function initial(): State {
     committedErrorCode: '',
     error: '',
     mode: 'basic',
+    activeCalculator: 'basic',
+    drafts: {},
     angle: 'deg',
     past: [],
     future: [],
@@ -161,8 +165,27 @@ function reducer(s: State, a: Action): State {
     }
     case 'cursor':
       return { ...s, cursor: a.pos };
-    case 'mode':
-      return { ...s, mode: a.mode };
+    case 'mode': {
+      const drafts = s.mode === 'history'
+        ? s.drafts
+        : { ...s.drafts, [s.activeCalculator]: snapshotOf(s) };
+      if (a.mode === 'history') return { ...s, mode: a.mode, drafts };
+      const draft = drafts[a.mode] ?? { expression: '', cursor: 0 };
+      return {
+        ...s,
+        mode: a.mode,
+        activeCalculator: a.mode,
+        drafts,
+        expression: draft.expression,
+        cursor: draft.cursor,
+        committed: '',
+        committedError: '',
+        committedErrorCode: '',
+        error: '',
+        past: [],
+        future: [],
+      };
+    }
     case 'angle':
       return { ...s, angle: a.mode };
     case 'undo': {
@@ -241,6 +264,17 @@ export interface Calculator {
    *  replaces the expression with the result. No-op when the expression
    *  ends with an operator. */
   negate: () => void;
+}
+
+const HISTORY_SCOPE_PREFIX = '\u2063calc:';
+
+function scopedExpression(mode: Exclude<Mode, 'history'>, expression: string): string {
+  return `${HISTORY_SCOPE_PREFIX}${mode}\u2063${expression}`;
+}
+
+function isScopedTo(expression: string, mode: Exclude<Mode, 'history'>): boolean {
+  if (!expression.startsWith(HISTORY_SCOPE_PREFIX)) return mode === 'basic';
+  return expression.startsWith(`${HISTORY_SCOPE_PREFIX}${mode}\u2063`);
 }
 
 export function useCalculator(): Calculator {
@@ -330,7 +364,7 @@ export function useCalculator(): Calculator {
       dispatch({ kind: 'commit', result: '', error: r.error ?? '', errorCode: r.errorCode ?? '' });
       return;
     }
-    history.record(state.expression, r.value);
+    history.record(scopedExpression(state.activeCalculator, state.expression), r.value);
     dispatch({ kind: 'history-bump' });
     dispatch({ kind: 'commit', result: r.value, error: '', errorCode: '' });
   }, [normalized, state.angle, state.expression]);
@@ -432,9 +466,9 @@ export function useCalculator(): Calculator {
   );
 
   const clearHistory = useCallback(() => {
-    history.clear();
+    history.replaceAll(history.list().filter((entry) => !isScopedTo(entry.expression, state.activeCalculator)));
     dispatch({ kind: 'history-bump' });
-  }, []);
+  }, [state.activeCalculator]);
 
   return {
     state,

@@ -118,6 +118,12 @@ Last updated: 2026-07-22 · Version: 0.1.0.0 · Status: 9 requested modules ship
 - **#7 横屏显示区被遮挡**：landscape 下 scientific 键盘 8 行 + toolbar 超出短视口高度；display-area 原内联 `minHeight:0` 让 flex 把它压到 0px（实测 iPhone13 landscape scientific 显示区 = 0px）。根因修复：`.display-area` 默认 `min-height:0`，但在 `@media (orientation:landscape) and (max-height:500px)` 下 `min-height:22vh`、在 `[data-force-landscape='true']` 下 `min-height:22vw`（旋转后高度=物理宽度，故用 vw 镜像 vh）。键盘本就 `overflow:auto`，现在改为内部滚动而非吃掉显示区。
 - **#8 电脑端长宽比锁**：两处根因。① CSS 数学错：旧规则 `width:100%`+`max-width:480`+`aspect-ratio`+`max-height`，当 `max-height` 封顶高度时 `aspect-ratio` 无法回缩**显式 width**，比例漂到 ~0.64（实测 1200×800 下 480×752=0.638，应为 0.5625）。修复：`width: min(480px, calc((100vh - var(--s-12)) * 9 / 16))`，width 与 max-height 同锚 `(100vh - s-12)`，故 width/max-height 恒为 9/16。② 门槛错：desktop 列 + 锁定原用 `@media (min-width:1024px)` / `tier==='desktop'`，但 Tauri Mac 默认窗口 420×720 永远 <1024 -> 锁与 Pill 都不出现。修复：改用 shell 属性 `data-desktop = isTauri || tier==='desktop'` 驱动（Tauri 任意宽度都算桌面），`aspectLocked` 默认 ON 也含 `isTauri`。
 
+### 2.12 TGC-26 calculator isolation and input polish
+- Narrow-view toolbars wrap all controls onto visible rows instead of hiding controls behind an undiscoverable scrollbar.
+- Basic/scientific expression and result stay adjacent; the result no longer uses an auto margin that creates empty vertical space.
+- Chemistry input uses three switchable touch-keyboard pages: digits, the complete Latin alphabet, and parser-supported symbols including grouping, hydrate, charge, reaction, and equilibrium tokens.
+- Calculator components remain mounted while switching modes so each calculator keeps its own temporary input. Basic/scientific reducer drafts and history views are scoped by calculator; legacy unscoped history belongs to Basic.
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）

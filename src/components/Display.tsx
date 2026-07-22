@@ -241,7 +241,7 @@ export function Display(props: Props) {
       />
       <div
         ref={resultRef}
-        style={{ ...resultStyle, marginTop: 'auto' }}
+        style={resultStyle}
         aria-live="polite"
         data-error-code={shownError && props.errorCode ? props.errorCode : undefined}
         data-error={shownError ? 'true' : undefined}
