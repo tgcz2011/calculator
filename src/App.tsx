@@ -391,7 +391,7 @@ export default function App() {
 
   return (
     <main
-      className="shell"
+      className={`shell${calc.state.mode === 'scientific' ? ' shell--scientific' : ''}`}
       data-tier={tier}
       data-aspect={aspectLocked ? 'locked' : 'auto'}
       data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
