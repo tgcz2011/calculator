@@ -2,6 +2,7 @@
 // driven by .ui-panel / .ui-section / .ui-modal-* classes in tokens.css.
 
 import { type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface PanelProps {
   children: ReactNode;
@@ -54,10 +55,16 @@ export interface ModalProps {
   children: ReactNode;
 }
 
-/** Modal wraps a backdrop + panel. Clicking the backdrop closes. */
+/** Modal wraps a backdrop + panel. Clicking the backdrop closes.
+ *  ponytail (TGC-25 #6): rendered through a portal to document.body so it
+ *  escapes any transformed ancestor - the scientific shell is CSS-rotated
+ *  for force-landscape, and a transformed ancestor becomes the containing
+ *  block for position:fixed descendants, which would otherwise pin the
+ *  backdrop to the rotated shell instead of the viewport. Portaling keeps
+ *  the modal upright and fullscreen regardless of shell rotation. */
 export function Modal({ open, onClose, ariaLabel, testId, children }: ModalProps) {
   if (!open) return null;
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -72,7 +79,8 @@ export function Modal({ open, onClose, ariaLabel, testId, children }: ModalProps
       >
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -68,6 +68,12 @@ test.describe('TGC-23 top bar deletion (item 1)', () => {
     await expect(page.getByTestId('picker-tile-history')).toHaveCount(0);
   });
 
+  test('history button is visible and opens history from calculator view', async ({ page }) => {
+    await expect(page.getByTestId('open-history')).toBeVisible();
+    await page.getByTestId('open-history').click();
+    await expect(page.getByText('还没有历史', { exact: true })).toBeVisible();
+  });
+
   test('right toolbar keeps home pill, drops TabBar', async ({ page }) => {
     await expect(page.getByTestId('exit-to-picker')).toBeVisible();
     // No top-level tabs.
@@ -138,6 +144,25 @@ test.describe('TGC-23 rotate button on both mobile and desktop (item 4)', () => 
     await expect(shell).toHaveAttribute('data-aspect', 'auto');
     await page.getByTestId('toggle-orientation').click();
     await expect(shell).toHaveAttribute('data-aspect', 'locked');
+  });
+});
+
+test.describe('TGC-25 long expression containment', () => {
+  test('long numeric input stays inside the display and scrolls to the cursor', async ({ page }) => {
+    await page.keyboard.type('1234567890123456789012345678901234567890');
+    const metrics = await page.locator('input[aria-label="Expression"]').evaluate((element) => {
+      const input = element as HTMLInputElement;
+      const rect = input.getBoundingClientRect();
+      const parent = input.parentElement!.getBoundingClientRect();
+      return {
+        inside: rect.left >= parent.left && rect.right <= parent.right,
+        scrollable: input.scrollWidth > input.clientWidth,
+        atEnd: input.scrollLeft + input.clientWidth >= input.scrollWidth - 2,
+      };
+    });
+    expect(metrics.inside).toBe(true);
+    expect(metrics.scrollable).toBe(true);
+    expect(metrics.atEnd).toBe(true);
   });
 });
 

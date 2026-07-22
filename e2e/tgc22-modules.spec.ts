@@ -109,6 +109,20 @@ test.describe('TGC-22 tax calculator', () => {
     await expect(page.getByTestId('tax-bonus-combined-total')).toContainText(/¥/);
   });
 
+  test('touch keypad edits the focused numeric field', async ({ page }) => {
+    await openTile(page, 'tax');
+    const income = page.getByTestId('tax-income-input');
+    await income.fill('');
+    await income.focus();
+    await expect(page.getByTestId('tax-touch-keyboard')).toBeVisible();
+    await page.getByTestId('tax-key-1').click();
+    await page.getByTestId('tax-key-2').click();
+    await page.getByTestId('tax-key-3').click();
+    await expect(income).toHaveValue('123');
+    await page.getByTestId('tax-key-backspace').click();
+    await expect(income).toHaveValue('12');
+  });
+
   test('grossup view solves back to a gross monthly salary', async ({ page }) => {
     await openTile(page, 'tax');
     await page.getByRole('tab', { name: '反推税前', exact: true }).click();
