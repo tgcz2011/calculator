@@ -371,6 +371,17 @@ export default function App() {
     return () => s.remove();
   }, []);
 
+  const persistentModes = [
+    <div key="date" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'date'}><DateTime /></div>,
+    <div key="units" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'units'}><Units /></div>,
+    <div key="programmer" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'programmer'}><Programmer /></div>,
+    <div key="chemistry" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'chemistry'}><ChemBalancer /></div>,
+    <div key="advanced" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'advanced'}><AdvancedMath /></div>,
+    <div key="loan" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'loan'}><Loan /></div>,
+    <div key="tax" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'tax'}><Tax /></div>,
+    <div key="kin" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'kin'}><Kin /></div>,
+  ];
+
   if (showPicker) {
     return (
       <main
@@ -415,6 +426,7 @@ export default function App() {
           </Pill>
         </div>
         <CalculatorPicker onPick={onPick} t={t} />
+        {persistentModes}
       </main>
     );
   }
@@ -547,30 +559,17 @@ export default function App() {
           />
         </div>
       )}
-      {calc.state.mode === 'history' ? (
+      {calc.state.mode === 'history' && (
         <HistoryList
           bump={calc.state.historyVersion}
+          mode={calc.state.activeCalculator}
           onRecall={calc.recall}
           onClear={calc.clearHistory}
           t={t}
         />
-      ) : calc.state.mode === 'date' ? (
-        <DateTime />
-      ) : calc.state.mode === 'units' ? (
-        <Units />
-      ) : calc.state.mode === 'programmer' ? (
-        <Programmer />
-      ) : calc.state.mode === 'chemistry' ? (
-        <ChemBalancer />
-      ) : calc.state.mode === 'advanced' ? (
-        <AdvancedMath />
-      ) : calc.state.mode === 'loan' ? (
-        <Loan />
-      ) : calc.state.mode === 'tax' ? (
-        <Tax />
-      ) : calc.state.mode === 'kin' ? (
-        <Kin />
-      ) : (
+      )}
+      {persistentModes}
+      {(calc.state.mode === 'basic' || calc.state.mode === 'scientific') && (
         <Keypad
           scientific={calc.state.mode === 'scientific'}
           angle={calc.state.angle}

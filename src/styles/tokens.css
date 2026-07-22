@@ -593,8 +593,19 @@ textarea:focus-visible {
   flex-direction: column;
 }
 
+.calculator-mode-pane {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.calculator-mode-pane[hidden] {
+  display: none;
+}
+
 .app-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: flex-start;
   gap: var(--s-2);
@@ -602,13 +613,6 @@ textarea:focus-visible {
   position: relative;
   z-index: var(--z-tabbar);
   width: 100%;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-
-.app-toolbar::-webkit-scrollbar {
-  display: none;
 }
 
 .app-toolbar--picker {
@@ -663,6 +667,29 @@ textarea:focus-visible {
   margin: 0;
   border: 0;
   border-radius: var(--radius-md);
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.chem-keyboard-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-1);
+  padding: 2px;
+  border-radius: var(--radius-full);
+  background: var(--key-fn-bg);
+}
+
+.chem-keyboard-tabs button {
+  min-height: 32px;
+  border-radius: var(--radius-full);
+  color: var(--key-fn-fg);
+  font-weight: 600;
+}
+
+.chem-keyboard-tabs button[aria-selected='true'] {
+  color: var(--bg);
+  background: var(--text);
 }
 
 /* Result primary / secondary text - display + result cards. */

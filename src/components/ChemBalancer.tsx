@@ -7,7 +7,7 @@
 // path is its own sub-module, not routed through engine.evaluate(). Mirrors
 // Programmer.tsx's self-contained pattern.
 
-import { type CSSProperties, type ReactNode, useCallback, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { balanceReaction, type BalanceResult } from '../chemistry/balancer';
 import { useI18n } from '../hooks/useI18n';
 import { Chip, ChipSegment } from './Chip';
@@ -23,24 +23,42 @@ const EXAMPLES: string[] = [
   'KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2',
 ];
 
-const CHEM_KEYS = [
-  { label: 'H', value: 'H' }, { label: 'C', value: 'C' },
-  { label: 'N', value: 'N' }, { label: 'O', value: 'O' },
-  { label: 'Na', value: 'Na' }, { label: 'Cl', value: 'Cl' },
-  { label: '(', value: '(' }, { label: ')', value: ')' },
-  { label: '₂', value: '2' }, { label: '₃', value: '3' },
-  { label: '₄', value: '4' }, { label: '₅', value: '5' },
-  { label: '₆', value: '6' }, { label: '₇', value: '7' },
-  { label: '₈', value: '8' }, { label: '₉', value: '9' },
-  { label: '+', value: ' + ' }, { label: '→', value: ' -> ' },
-  { label: '·', value: '·' },
-] as const;
+const CHEM_KEY_PAGES = {
+  numbers: [
+    { label: '₀', value: '0' }, { label: '₁', value: '1' },
+    { label: '₂', value: '2' }, { label: '₃', value: '3' },
+    { label: '₄', value: '4' }, { label: '₅', value: '5' },
+    { label: '₆', value: '6' }, { label: '₇', value: '7' },
+    { label: '₈', value: '8' }, { label: '₉', value: '9' },
+  ],
+  letters: [
+    ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((value) => ({ label: value, value })),
+    ...'abcdefghijklmnopqrstuvwxyz'.split('').map((value) => ({ label: value, value })),
+  ],
+  symbols: [
+    { label: '+', value: ' + ' }, { label: '−', value: '-' },
+    { label: '→', value: ' -> ' }, { label: '⇌', value: ' <-> ' },
+    { label: '(', value: '(' }, { label: ')', value: ')' },
+    { label: '[', value: '[' }, { label: ']', value: ']' },
+    { label: '·', value: '·' }, { label: '^', value: '^' },
+    { label: '=', value: ' = ' }, { label: '␠', value: ' ' },
+  ],
+} as const;
+
+type ChemKeyPage = keyof typeof CHEM_KEY_PAGES;
+
+let chemistryDraft = '';
 
 export function ChemBalancer() {
   const { t } = useI18n();
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(chemistryDraft);
   const [result, setResult] = useState<BalanceResult | null>(null);
+  const [keyPage, setKeyPage] = useState<ChemKeyPage>('numbers');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    chemistryDraft = input;
+  }, [input]);
 
   const insertToken = useCallback((token: string) => {
     const element = inputRef.current;
@@ -117,12 +135,26 @@ export function ChemBalancer() {
         />
       </label>
 
+      <div className="chem-keyboard-tabs" role="tablist" aria-label={t('chem.keyboard')}>
+        {(['numbers', 'letters', 'symbols'] as const).map((page) => (
+          <button
+            key={page}
+            type="button"
+            role="tab"
+            aria-selected={keyPage === page}
+            data-testid={`chem-keyboard-tab-${page}`}
+            onClick={() => setKeyPage(page)}
+          >
+            {page === 'numbers' ? '123' : page === 'letters' ? 'ABC' : '+−×'}
+          </button>
+        ))}
+      </div>
       <div className="touch-keyboard chem-keyboard" data-testid="chem-touch-keyboard" aria-label={t('chem.keyboard')}>
-        {CHEM_KEYS.map((key) => (
+        {CHEM_KEY_PAGES[keyPage].map((key) => (
           <Key
             key={`${key.label}-${key.value}`}
             label={key.label}
-            variant={/[₂-₉]/.test(key.label) ? 'num' : 'fn'}
+            variant={keyPage === 'numbers' ? 'num' : 'fn'}
             size="compact"
             mono
             onClick={() => insertToken(key.value)}

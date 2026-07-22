@@ -76,8 +76,13 @@ test.describe('TGC-25 #7 landscape scientific display floor', () => {
     // value). Assert > 50 to leave room for token rounding.
     expect(dispH).toBeGreaterThan(50);
     // And the keypad scrolls internally instead of crushing the display.
+    // TGC-26: Minimax's persistentModes keep Programmer/Chemistry panes
+    // mounted (hidden, display:none) as earlier shell children that also
+    // contain .ui-key - skip hidden children so we measure the real Keypad.
     const keypadScrolls = await page.locator('main.shell').evaluate((el) => {
-      const kp = Array.from(el.children).find((c) => c.querySelector('.ui-key'));
+      const kp = Array.from(el.children).find(
+        (c) => c.querySelector('.ui-key') && getComputedStyle(c).display !== 'none',
+      );
       return kp ? kp.scrollHeight > kp.clientHeight : false;
     });
     expect(keypadScrolls).toBe(true);
