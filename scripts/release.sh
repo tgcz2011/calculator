@@ -53,7 +53,7 @@ gh release create "${TAG}" \
   --title "${TAG}" \
   --notes "Release ${TAG} — Apple-style calculator (Web PWA + iOS/Android/desktop native shells).
 
-- Full feature set: basic / scientific / programmer / units / date / history / sync (WebDAV + 坚果云 preset) / theme (light/dark + system fallback)
+- 4-segment version scheme (MAJOR.MINOR.HOTFIX.PATCH); see RELEASING.md.
 - Built artifact: ${ARTIFACT} — unzip and open dist/index.html in any modern browser, or sideload via the per-platform builds when available.
 
 See commit log since the previous tag for the full diff." \

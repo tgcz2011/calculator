@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-22 · Version: 0.8.0 · Status: 9 requested modules shipped + TGC-23 UI polish in progress.
+Last updated: 2026-07-22 · Version: 0.0.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + 4-segment version scheme adopted.
 
 ---
 
@@ -165,8 +165,11 @@ Last updated: 2026-07-22 · Version: 0.8.0 · Status: 9 requested modules shippe
 
 ---
 
-## 5. Release Process（摘要，详见 `AGENTS.md`）
-- 严格 SemVer。`engine`/`history`/`sync` 签名改动至少 minor bump。
-- `./scripts/release.sh` 一键发版（要求 main + 干净 + tag 唯一）。先 bump `package.json` version 的 PR squash-merge，再在 main 跑 release.sh。
-- 0.8.0 = 9 模块全员首版（化学 #36 + 高数 #37 + 贷款/个税/亲戚/汇率 #38 + 既有科学/日期/单位/programmer）。
-- 0.8.1 = TGC-23 改进：顶栏 TabBar 移除 / 数字显示字号动态 / 横竖屏一键切换（移动+PC）/ 电脑长宽比保留。
+## 5. Release Process（摘要，详见 [`AGENTS.md`](./AGENTS.md) → `RELEASING.md`）
+- **四段版本号**：`大改版.小改版.重大问题修复.小问题修复`（`MAJOR.MINOR.HOTFIX.PATCH`）。每一次改动 → 一个 bump → 一个 release。
+- `./scripts/release.sh` 一键发版（要求 main + 干净 + tag 唯一）。先 bump `package.json` version 的 PR squash-merge，再在 main 跑 release.sh。feature-branch 上的预发版用 `gh release create ... --prerelease` 手动发（详见 `RELEASING.md` §3b）。
+- `engine` / `history` / `sync` 签名是公开契约：新增参数 = minor，去掉/改返回 = major，wrong-output 不动签名 = hotfix（详见 `RELEASING.md` §5）。
+- 历史版本：
+  - 0.8.0 = 9 模块全员首版（化学 #36 + 高数 #37 + 贷款/个税/亲戚/汇率 #38 + 既有科学/日期/单位/programmer）。
+  - 0.8.1 = TGC-23 改进：顶栏 TabBar 移除 / 数字显示字号动态 / 横竖屏一键切换（移动+PC）/ 电脑长宽比保留。
+  - **0.0.0.0** = 项目改用四段版本号方案的首版（自身仅 bump version + 文档 + 脚本）。同一 commit 5620679（即 0.8.1）的 UI 工作打上 v0.0.0.0 tag；后续每次改动在 main 上独立 bump + release。
