@@ -106,6 +106,13 @@ Last updated: 2026-07-22 · Version: 0.0.0.0 · Status: 9 requested modules ship
   - PC 端：因为 `screen.orientation` 不可用，按钮改为 toggle `aspectLocked`（locked=9/16 竖屏壳 / unlocked=横向 480px 列）。这给用户一个"PC 上也能横竖切换"的真实视觉效果，与长宽比 Pill 行为一致但语义不同。
 - **数字显示字号动态**：`--display-fs` 由 `clamp(56px, 9.5vw, 100px)` 提供基于视口的流体大小（最小值从 48 提到 56，读数更清楚）。当结果超长（多位数小数、错误信息等）时，`Display.tsx` 的 `useAutoShrinkFont` 用 `useLayoutEffect` 测量 `scrollWidth > clientWidth` 并按 0.9 倍率循环缩小直到合入，单次 effect 同步执行不触发 re-render。横屏 (`max-height: 500px`) 阈值降为 `clamp(32px, 8vh, 56px)`。
 
+### 2.10 TGC-25 accessibility and touch-input polish
+- The calculator toolbar is horizontally scrollable and its pills never shrink, so Home, History, Rotate, aspect, locale, theme, and sync controls remain reachable on narrow screens. The former ambiguous arrow is a labeled Rotate control.
+- History is reachable through a visible clock button from the picker and every calculator view; it remains a view rather than a picker tile.
+- The basic expression editor keeps long input inside the display width and scrolls horizontally with the cursor instead of overflowing the shell.
+- Tax numeric fields expose a sticky in-app decimal keypad for touch users. It edits whichever field most recently received focus and provides digits, decimal point, backspace, and clear.
+- Chemistry provides a formula keypad with common elements, operators, parentheses, hydrate dot, an arrow, and visually subscripted digit keys that insert parser-compatible ASCII counts at the current cursor.
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）

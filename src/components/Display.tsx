@@ -48,9 +48,9 @@ export function Display(props: Props) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (document.activeElement !== el) return;
     const safe = Math.max(0, Math.min(props.cursor, props.expression.length));
-    el.setSelectionRange(safe, safe);
+    if (document.activeElement === el) el.setSelectionRange(safe, safe);
+    if (safe === props.expression.length) el.scrollLeft = el.scrollWidth;
   }, [props.cursor, props.expression]);
 
   function onSelect() {
@@ -135,6 +135,9 @@ export function Display(props: Props) {
     border: 0,
     outline: 0,
     fontFamily: 'inherit',
+    minWidth: 0,
+    maxWidth: '100%',
+    overflowX: 'auto',
   };
 
   const resultStyle: CSSProperties = {

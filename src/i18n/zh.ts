@@ -29,6 +29,7 @@ export const zh: Record<string, string> = {
   'common.clear': '清空',
   'common.home': '返回主页选择计算器',
   'common.rotate': '切换屏幕方向',
+  'common.rotate.short': '旋转',
   'common.rotate.desktopLocked': '解锁为宽屏布局',
   'common.rotate.desktopUnlocked': '锁定为竖屏壳',
   'common.aspect.lock': '锁定长宽比',
@@ -167,6 +168,7 @@ export const zh: Record<string, string> = {
   'tax.compare.title': '两种方案对比',
   'tax.bonus.separate': '单独计税',
   'tax.bonus.combined': '并入综合所得',
+  'tax.keyboard': '触屏数字键盘',
 
   // Kin mode
   'kin.field.expr': '关系链（"爸爸的妈妈"）',
@@ -208,6 +210,7 @@ export const zh: Record<string, string> = {
   'chem.conservation.reactants': '反应物',
   'chem.conservation.products': '生成物',
   'chem.charge': '电荷',
+  'chem.keyboard': '化学式下标键盘',
 
   // Advanced math mode
   'adv.tab.solve': '解方程',

@@ -112,6 +112,22 @@ test.describe('Chemistry balancer', () => {
     await expect(input).toHaveValue('H2 + O2 -> H2O');
   });
 
+  test('subscript keypad inserts parser-compatible formula tokens at the cursor', async ({ page }) => {
+    await expect(page.getByTestId('chem-touch-keyboard')).toBeVisible();
+    await page.getByTestId('chem-key-H').click();
+    await page.getByTestId('chem-key-2').click();
+    await page.getByTestId('chem-key-+').click();
+    await page.getByTestId('chem-key-O').click();
+    await page.getByTestId('chem-key-2').click();
+    await page.getByTestId('chem-key-->').click();
+    await page.getByTestId('chem-key-H').click();
+    await page.getByTestId('chem-key-2').click();
+    await page.getByTestId('chem-key-O').click();
+    await expect(page.getByTestId('chem-input')).toHaveValue('H2 + O2 -> H2O');
+    await page.getByTestId('chem-balance').click();
+    await expect(page.getByTestId('chem-equation')).toBeVisible();
+  });
+
   test('typing digits and operators into the chemistry input is preserved', async ({ page }) => {
     const input = page.getByTestId('chem-input');
     await input.click();
