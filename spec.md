@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-22 · Version: 0.0.0.1 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 orientation/landscape/aspect root fixes (#6/#7/#8) shipped.
+Last updated: 2026-07-22 · Version: 0.1.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped.
 
 ---
 
