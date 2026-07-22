@@ -102,15 +102,20 @@ test.describe('Language switcher (item 3)', () => {
     expect(['zh', 'en']).toContain(after);
   });
 
-  test('TabBar labels reflect the active locale', async ({ page }) => {
+  test('Picker tile labels reflect the active locale', async ({ page }) => {
+    // ponytail (TGC-23): the top TabBar was removed — picker tiles are now
+    // the only mode labels in the UI. Verify they localize to the active
+    // locale. The toggle-locale pill is rendered in both the picker top bar
+    // and the calculator toolbar.
     await page.evaluate(() => localStorage.setItem('lang-pref', 'zh'));
-    await pickBasic(page);
-    // First tab is Basic; in zh that's "基础".
-    await expect(page.getByRole('tab').first()).toHaveText('基础');
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    // First tile is Basic; in zh that's "基础".
+    await expect(page.getByTestId('picker-tile-basic')).toContainText('基础');
 
     // Switch to en.
     await page.getByTestId('toggle-locale').click();
-    await expect(page.getByRole('tab').first()).toHaveText('Basic');
+    await expect(page.getByTestId('picker-tile-basic')).toContainText('Basic');
   });
 
   test('display error message localizes based on locale', async ({ page }) => {

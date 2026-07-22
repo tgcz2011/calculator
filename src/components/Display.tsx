@@ -1,4 +1,4 @@
-import { type CSSProperties, type KeyboardEvent, useEffect, useRef } from 'react';
+import { type CSSProperties, type KeyboardEvent, useEffect, useLayoutEffect, useRef } from 'react';
 import { localizeErrorMessage, type Locale } from '../i18n';
 
 // ponytail: one Unicode glyph per error code, semantically chosen:
@@ -158,9 +158,59 @@ export function Display(props: Props) {
     // value or opacity — opacity < 1 creates a compositing layer that can
     // intercept pointer events on the keypad below (e2e regression).
     fontStyle: props.liveSticky ? 'italic' : 'normal',
-    // ponytail: trim huge font on error so "Mismatched parentheses" doesn't overflow.
+    // ponytail (TGC-23): errors stay on the small error fontSize (don't run
+    // auto-shrink on them — error text is short and the clamp is fine).
     ...(shownError ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
   };
+
+  // ponytail (TGC-23): dynamic result font shrink. The token clamp gives a
+  // reasonable size for short results, but multi-digit decimals (e.g. long
+  // division, big factorial, or live error labels) can still wrap to 2-3
+  // lines on narrow phones or compact desktop shells. We want a single
+  // line, so on every render we measure the actual line count and shrink
+  // in 0.9× steps until it converges. Single useLayoutEffect per change
+  // so the user never sees a "flash at full size then shrink" pop.
+  // Errors take the smaller errorSize path above and skip this entirely.
+  //
+  // We can't rely on scrollWidth > clientWidth for the overflow check:
+  // overflowWrap:break-word + wordBreak:break-all wrap digits, so
+  // scrollWidth stays bounded by clientWidth even for 15+ digit results.
+  // Instead we count lines (offsetHeight / lineHeight). 1 line = good;
+  // 2+ lines = shrink. The 0.4× floor caps absurd inputs to a single
+  // readable line instead of shrinking toward zero.
+  //
+  // Implementation gotcha: lineHeight must be re-read INSIDE the
+  // measureLines closure. The CSS `line-height: 1.05` is unitless, so
+  // getComputedStyle returns the resolved value in px at the current
+  // font-size. If we capture lineHeight once before the loop, it stays
+  // at the natural-size value (e.g. 105px) while the loop shrinks the
+  // font down to 65px — the next call still divides offsetHeight by
+  // 105 and reports "1 line" when it's actually 2. Re-reading on each
+  // iteration makes the check track the live font size.
+  const resultRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (shownError) return;
+    const el = resultRef.current;
+    if (!el) return;
+    el.style.fontSize = 'var(--display-fs)';
+    const measureLines = (): number => {
+      const fontSize = parseFloat(getComputedStyle(el).fontSize);
+      // CSS lineHeight: 1.05 (unitless) → resolved in px. Fall back to
+      // fontSize * 1.05 if the browser returned a unitless token.
+      const rawLh = parseFloat(getComputedStyle(el).lineHeight);
+      const lh = Number.isFinite(rawLh) && rawLh > 0
+        ? rawLh
+        : fontSize * 1.05;
+      return Math.max(1, Math.round(el.offsetHeight / lh));
+    };
+    let scale = 1;
+    for (let i = 0; i < 10; i++) {
+      el.style.fontSize = `calc(var(--display-fs) * ${scale})`;
+      if (measureLines() <= 1) return;
+      scale *= 0.9;
+    }
+    el.style.fontSize = 'calc(var(--display-fs) * 0.4)';
+  }, [props.result, shownError, props.expression]);
 
   // ponytail: previous layout used `justify-content: flex-end` to push input + result
   // to the bottom of the display column. When the display column got squeezed on
@@ -187,6 +237,7 @@ export function Display(props: Props) {
         style={exprStyle}
       />
       <div
+        ref={resultRef}
         style={{ ...resultStyle, marginTop: 'auto' }}
         aria-live="polite"
         data-error-code={shownError && props.errorCode ? props.errorCode : undefined}

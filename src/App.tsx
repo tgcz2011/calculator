@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Display } from './components/Display';
 import { Keypad } from './components/Keypad';
-import { TabBar } from './components/TabBar';
 import { HistoryList } from './components/HistoryList';
 import { SyncSettings } from './components/SyncSettings';
 import { DateTime } from './components/DateTime';
@@ -56,6 +55,16 @@ function useShellWidth(): 'phone' | 'tablet' | 'desktop' {
 // is gated on lockFailed so it only appears when we couldn't actually lock.
 // Other modes call unlock() so the user can rotate freely; a top-bar rotate
 // Pill lets the user manually flip orientation in any mode.
+//
+// ponytail (TGC-23): the top TabBar (mode chip strip) was removed per user
+// request — the home-page CalculatorPicker is now the only mode selector.
+// The angle-mode (DEG/RAD) toggle used to live inside TabBar; it's now a
+// Pill in the right-side toolbar, gated on mode === 'scientific'. The rotate
+// Pill now also renders on desktop (was mobile-only): on mobile it toggles
+// screen.orientation; on desktop screen.orientation is a no-op, so the
+// button is wired to flip the aspect lock instead — same visual effect
+// (tall/portrait shell ↔ wide/landscape column) but driven by the layout
+// instead of the monitor.
 
 // ponytail: picker shows on every boot — the user wants the calculator
 // selector as the always-on entry point ("重启后一定要到选择计算器的界面去").
@@ -205,8 +214,9 @@ export default function App() {
   }, [calc, applyOrientationForMode]);
 
   // ponytail: wrap calc.setMode so the orientation lock fires synchronously
-  // inside the TabBar chip's click handler (preserves user gesture for
-  // requestFullscreen on mobile web).
+  // inside the picker tile's click handler (preserves user gesture for
+  // requestFullscreen on mobile web). Also injected into useKeyboardExtras
+  // so Ctrl/Cmd+1..6 honors the same lock-on-enter rule (TGC-23 §3.9).
   const handleModeChange = useCallback((m: Mode) => {
     calc.setMode(m);
     applyOrientationForMode(m);
@@ -309,7 +319,7 @@ export default function App() {
   );
 
   useKeyboard(handleKey);
-  useKeyboardExtras(calc);
+  useKeyboardExtras(calc, handleModeChange);
 
   // ponytail: iOS safe-area tweak for the display top — extend the dark display into the
   // status bar via a small extra style. Lightweight, no extra component.
@@ -389,73 +399,86 @@ export default function App() {
       <div
         style={{
           display: 'flex',
-          alignItems: 'stretch',
-          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          justifyContent: 'flex-end',
           gap: 'var(--s-2)',
+          padding: 'var(--s-3) var(--s-4)',
           position: 'relative',
           zIndex: 'var(--z-tabbar)',
         }}
       >
-        <div style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
-          <TabBar
-            mode={calc.state.mode}
-            angle={calc.state.angle}
-            onMode={handleModeChange}
-            onAngle={calc.setAngle}
-            t={t}
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--s-2)', padding: 'var(--s-3) var(--s-4) var(--s-3) 0' }}>
+        {calc.state.mode === 'scientific' && (
           <Pill
-            onClick={onExitToPicker}
-            ariaLabel={t('common.home')}
-            testId="exit-to-picker"
+            size="lg"
+            onClick={() => calc.setAngle(calc.state.angle === 'deg' ? 'rad' : 'deg')}
+            ariaLabel={`Angle mode, currently ${calc.state.angle.toUpperCase()}`}
+            testId="toggle-angle"
           >
-            <span aria-hidden style={{ fontSize: 16 }}>{'\u2302'}</span>
+            {calc.state.angle.toUpperCase()}
           </Pill>
-          {!isDesktop && (
-            <Pill
-              onClick={() => void orientation.toggle()}
-              ariaLabel={t('common.rotate')}
-              testId="toggle-orientation"
-            >
-              <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
-            </Pill>
-          )}
-          {tier === 'desktop' && (
-            <Pill
-              onClick={() => setAspectLocked((v) => !v)}
-              ariaLabel={aspectLocked ? t('common.aspect.unlock') : t('common.aspect.lock')}
-              testId="toggle-aspect"
-            >
-              <span aria-hidden style={{ fontSize: 16 }}>{aspectLocked ? '\u{1F512}' : '\u{1F513}'}</span>
-            </Pill>
-          )}
+        )}
+        <Pill
+          onClick={onExitToPicker}
+          ariaLabel={t('common.home')}
+          testId="exit-to-picker"
+        >
+          <span aria-hidden style={{ fontSize: 16 }}>{'\u2302'}</span>
+        </Pill>
+        <Pill
+          onClick={() => {
+            // ponytail (TGC-23): mobile flips real screen.orientation; on
+            // desktop the API is a no-op, so the button is wired to flip
+            // the aspect lock instead (same visual: tall portrait shell ↔
+            // wide landscape column). Both call sites share this single
+            // helper so the two pills don't drift apart.
+            if (isDesktop) {
+              setAspectLocked((v) => !v);
+            } else {
+              void orientation.toggle();
+            }
+          }}
+          ariaLabel={
+            isDesktop
+              ? (aspectLocked ? t('common.rotate.desktopUnlocked') : t('common.rotate.desktopLocked'))
+              : t('common.rotate')
+          }
+          testId="toggle-orientation"
+        >
+          <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
+        </Pill>
+        {tier === 'desktop' && (
           <Pill
-            onClick={toggleLocale}
-            ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
-            testId="toggle-locale"
+            onClick={() => setAspectLocked((v) => !v)}
+            ariaLabel={aspectLocked ? t('common.aspect.unlock') : t('common.aspect.lock')}
+            testId="toggle-aspect"
           >
-            <span aria-hidden style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em' }}>
-              {locale === 'zh' ? 'EN' : '中'}
-            </span>
+            <span aria-hidden style={{ fontSize: 16 }}>{aspectLocked ? '\u{1F512}' : '\u{1F513}'}</span>
           </Pill>
-          <Pill
-            onClick={toggleTheme}
-            ariaLabel={theme === 'light' ? t('common.theme.light') : t('common.theme.dark')}
-            testId="toggle-theme"
-          >
-            <span aria-hidden>{theme === 'light' ? '\u263D' : '\u2600'}</span>
-          </Pill>
-          <Pill
-            onClick={() => setSyncOpen(true)}
-            ariaLabel={t('common.syncSettings')}
-            testId="open-sync-settings"
-          >
-            <span aria-hidden style={{ fontSize: 16 }}>{'\u2699'}</span>
-            <span>{t('common.sync')}</span>
-          </Pill>
-        </div>
+        )}
+        <Pill
+          onClick={toggleLocale}
+          ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
+          testId="toggle-locale"
+        >
+          <span aria-hidden style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.04em' }}>
+            {locale === 'zh' ? 'EN' : '中'}
+          </span>
+        </Pill>
+        <Pill
+          onClick={toggleTheme}
+          ariaLabel={theme === 'light' ? t('common.theme.light') : t('common.theme.dark')}
+          testId="toggle-theme"
+        >
+          <span aria-hidden>{theme === 'light' ? '\u263D' : '\u2600'}</span>
+        </Pill>
+        <Pill
+          onClick={() => setSyncOpen(true)}
+          ariaLabel={t('common.syncSettings')}
+          testId="open-sync-settings"
+        >
+          <span aria-hidden style={{ fontSize: 16 }}>{'\u2699'}</span>
+          <span>{t('common.sync')}</span>
+        </Pill>
       </div>
       {calc.state.mode === 'scientific' && sciLockFailed && (
         <button

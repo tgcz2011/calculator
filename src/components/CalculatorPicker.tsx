@@ -1,9 +1,12 @@
 // ponytail: home-screen calculator selector (TGC-20 item 2). The picker is
 // the always-on entry point — App.tsx boots here every time (no localStorage
 // skip). All five calculators are first-class tiles below. History is NOT a
-// tile (it's a view of past calculations, reachable via the TabBar inside any
-// calculator). Adding a new calculator is one config entry + one Mode case in
-// App.tsx (no layout change).
+// tile (it's a view of past calculations, reachable via Ctrl/Cmd+3).
+// ponytail (TGC-23): the top TabBar was removed, so the picker is the only
+// mode selector in the UI. History moves from a TabBar entry to a keyboard
+// shortcut; users who really want a UI button can still reach it by
+// Ctrl+3 (or by binding a custom hotkey later). Adding a new calculator
+// is one config entry + one Mode case in App.tsx (no layout change).
 
 import type { CSSProperties } from 'react';
 import type { Mode } from '../state/useCalculator';
@@ -93,7 +96,7 @@ const TILES: CalculatorTileDef[] = [
   // ponytail: History is intentionally NOT a picker tile — it's a view of
   // past calculations, not a calculator itself. Picking it as the entry
   // point would land the user on an empty-state screen with no history.
-  // Reach History via the TabBar at the top of any calculator instead.
+  // Reach History via Ctrl/Cmd+3 (TGC-23 — the top TabBar was removed).
 ];
 
 interface Props {

@@ -1,6 +1,7 @@
 // zh-CN dictionary — canonical authoring source. en.ts mirrors this.
 export const zh: Record<string, string> = {
-  // TabBar / modes
+  // Modes (referenced from the picker tiles and the now-removed top TabBar;
+  // the labels stay in the dictionary so the picker tiles can localize).
   'mode.basic': '基础',
   'mode.scientific': '科学',
   'mode.history': '历史',
@@ -28,6 +29,8 @@ export const zh: Record<string, string> = {
   'common.clear': '清空',
   'common.home': '返回主页选择计算器',
   'common.rotate': '切换屏幕方向',
+  'common.rotate.desktopLocked': '解锁为宽屏布局',
+  'common.rotate.desktopUnlocked': '锁定为竖屏壳',
   'common.aspect.lock': '锁定长宽比',
   'common.aspect.unlock': '解锁长宽比',
   'app.hint.rotate.tap': '点按此处进入横屏 · 展开科学函数键盘',

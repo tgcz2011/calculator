@@ -1,41 +1,65 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 
 // ponytail: KeypadButton uses aria-label for ops / fn keys (visible text
-// differs from accessible name), e.g. "+" button -> aria-label="Add". tab
-// row tabs are role="tab", not role="button". The angle toggle in TabBar
-// has aria-label "Angle mode, currently DEG/RAD" with visible text "DEG/RAD".
-// One helper that knows about all three.
+// differs from accessible name), e.g. "+" button -> aria-label="Add". The
+// angle toggle now lives in the right-side toolbar (TGC-23 — the top TabBar
+// was removed) with aria-label "Angle mode, currently DEG/RAD".
 //
-// ponytail: the home-screen calculator picker (src/components/CalculatorPicker.tsx)
-// always shows on boot. beforeEach clicks the Basic tile after page load so
-// tests land in the calculator. Tabs/modes/picker are kept independent of
-// keypad, so this helper still works whether the keypad is basic or scientific.
+// ponytail (TGC-23): mode switching no longer goes through a top TabBar.
+// The home-screen CalculatorPicker is the only mode selector in the UI; the
+// `pickMode` helper below exits to the picker, then clicks the target tile.
+// `history` is the one mode that isn't a picker tile (it's a view of past
+// calculations, not a calculator — see spec.md §1) so we reach it via the
+// Ctrl/Cmd+3 keyboard shortcut (useKeyboardExtras).
 const ARIA_OP: Record<string, string> = {
   '+': 'Add', '−': 'Subtract', '×': 'Multiply', '÷': 'Divide',
   '%': 'Percent', '±': 'Negate', '=': 'Equals',
   AC: 'All clear',
   'x²': 'Square', 'xʸ': 'Exponent',
   sin: 'Sine', cos: 'Cosine', tan: 'Tangent',
-  π: 'Pi', ln: 'Natural log', log: 'Log base 10',
+  'π': 'Pi', ln: 'Natural log', log: 'Log base 10',
   '√': 'Square root', e: 'Euler number',
   '(': 'Open parenthesis', ')': 'Close parenthesis',
   '⌫': 'Backspace',
 };
-const TAB_LABELS = new Set(['基础', '科学', '历史', '程序员', '单位', '日期', '化学', '高数']);
+// ponytail (TGC-23): maps the legacy Chinese tab names to the English Mode
+// tile suffix. The old TAB_LABELS set pointed at role=tab elements in the
+// top TabBar; we now route them through the picker or the Ctrl+3 shortcut.
+const ZH_TO_MODE: Record<string, string> = {
+  '基础': 'basic',
+  '科学': 'scientific',
+  '历史': 'history',
+  '程序员': 'programmer',
+  '单位': 'units',
+  '日期': 'date',
+  '化学': 'chemistry',
+  '高数': 'advanced',
+  '贷款': 'loan',
+  '个税': 'tax',
+  '亲戚称呼': 'kin',
+};
 
-// ponytail: TabBar's t() output is locale-dependent. Tests pin 'lang-pref'='zh'
-// in clearAndSeedLocale (called from beforeEach) so the labels are stable:
-// 基础/科学/历史/程序员/单位/日期. Sub-tabs in Date / Units modes also use
-// Chinese labels (Units categories are hardcoded Chinese in src/units/engine.ts;
-// Date sub-tabs go through t() so the zh pin keeps them stable).
+async function pickMode(page: Page, mode: string): Promise<void> {
+  if (mode === 'history') {
+    // ponytail: history isn't a picker tile (it's a view, see spec.md §1).
+    // Ctrl/Cmd+3 routes to history through useKeyboardExtras.
+    await page.keyboard.press('Control+3');
+    return;
+  }
+  await page.getByTestId('exit-to-picker').click();
+  await expect(page.getByTestId('calculator-picker')).toBeVisible();
+  await page.getByTestId(`picker-tile-${mode}`).click();
+  await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
+}
 
 async function tap(page: Page, label: string): Promise<void> {
-  if (TAB_LABELS.has(label)) {
-    await page.getByRole('tab', { name: label, exact: true }).click();
+  if (label in ZH_TO_MODE) {
+    await pickMode(page, ZH_TO_MODE[label]);
     return;
   }
   if (label === 'RAD' || label === 'DEG') {
-    // Angle toggle in TabBar (TabBar.tsx:56). aria-label changes with state.
+    // Angle toggle moved to the right-side toolbar (App.tsx). aria-label
+    // is still "Angle mode, currently DEG/RAD", so the regex still matches.
     await page.getByRole('button', { name: /^Angle mode, currently/ }).click();
     return;
   }
@@ -447,13 +471,13 @@ test.describe('Sync settings panel', () => {
 });
 
 test.describe('Date / Time mode', () => {
-  test('Kinship tab is the last tab in the order', async ({ page }) => {
-    const tabs = page.getByRole('tab');
-    await expect(tabs.last()).toHaveText('亲戚称呼');
-  });
+  // ponytail (TGC-23): the old "Kinship tab is the last tab" test asserted
+  // a TabBar ordering that's no longer applicable (TabBar removed). The
+  // home-page picker has its own tile ordering — see e2e/tgc20-improvements
+  // for the picker-tile coverage. No replacement here.
 
   test('switching to Date hides Display and Keypad', async ({ page }) => {
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await expect(page.getByTestId('date-mode')).toBeVisible();
     await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
   });
@@ -461,21 +485,21 @@ test.describe('Date / Time mode', () => {
   test('diff sub-tab computes days between two dates', async ({ page }) => {
     // DateTime.tsx computes `days = (a - b) / 86400000` so +N when A > B.
     // Fill A as the later date for the expected "+14" sign.
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await page.getByTestId('date-a').fill('2025-01-15');
     await page.getByTestId('date-b').fill('2025-01-01');
     await expect(page.getByTestId('date-diff-days')).toHaveText('+14 天');
   });
 
   test('diff is negative when A is before B', async ({ page }) => {
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await page.getByTestId('date-a').fill('2025-01-01');
     await page.getByTestId('date-b').fill('2025-01-15');
     await expect(page.getByTestId('date-diff-days')).toHaveText('-14 天');
   });
 
   test('add/sub adds days to a base date', async ({ page }) => {
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await page.getByRole('tab', { name: '加减' }).click();
     await page.getByTestId('date-base').fill('2025-01-01');
     await page.getByTestId('date-offset').fill('30');
@@ -483,7 +507,7 @@ test.describe('Date / Time mode', () => {
   });
 
   test('add/sub with negative offset goes backward', async ({ page }) => {
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await page.getByRole('tab', { name: '加减' }).click();
     await page.getByTestId('date-base').fill('2025-03-01');
     await page.getByTestId('date-offset').fill('-15');
@@ -491,7 +515,7 @@ test.describe('Date / Time mode', () => {
   });
 
   test('weekday sub-tab shows the weekday name', async ({ page }) => {
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await page.getByRole('tab', { name: '星期' }).click();
     await page.getByTestId('date-weekday-input').fill('2025-01-01');
     // Locale is pinned to zh (lang-pref=zh in clearAndSeedLocale via beforeEach),
@@ -501,7 +525,7 @@ test.describe('Date / Time mode', () => {
   });
 
   test('today button fills current date', async ({ page }) => {
-    await page.getByRole('tab', { name: '日期' }).click();
+    await tap(page, '日期');
     await page.getByRole('tab', { name: '星期' }).click();
     const today = new Date().toISOString().slice(0, 10);
     await page.getByTestId('date-today').click();
@@ -510,44 +534,39 @@ test.describe('Date / Time mode', () => {
 });
 
 test.describe('Units + Currency mode', () => {
-  test('Units tab is before Date tab in the order', async ({ page }) => {
-    const labels = await page.getByRole('tab').allTextContents();
-    const unitsIdx = labels.indexOf('单位');
-    const dateIdx = labels.indexOf('日期');
-    expect(unitsIdx).toBeGreaterThan(-1);
-    expect(dateIdx).toBeGreaterThan(-1);
-    expect(unitsIdx).toBeLessThan(dateIdx);
-  });
+  // ponytail (TGC-23): "Units tab is before Date tab" used to assert the top
+  // TabBar order. Picker order is covered by tgc20-improvements.spec.ts. No
+  // replacement here.
 
   test('switching to Units hides Display and Keypad', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await expect(page.getByTestId('units-mode')).toBeVisible();
     await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('length conversion: 5 km = 5000 m', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await page.getByTestId('units-amount').fill('5');
     // convertUnits uses unitMath.format (no comma). Accept either form.
     await expect(page.getByTestId('units-result-value')).toContainText(/5,?000/);
   });
 
   test('mass conversion: 1 kg -> g = 1000', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await page.getByRole('tab', { name: '质量' }).click();
     await page.getByTestId('units-amount').fill('1');
     await expect(page.getByTestId('units-result-value')).toContainText(/1,?000/);
   });
 
   test('temperature conversion: 0 celsius -> 32 fahrenheit', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await page.getByRole('tab', { name: '温度' }).click();
     await page.getByTestId('units-amount').fill('0');
     await expect(page.getByTestId('units-result-value')).toContainText('32');
   });
 
   test('data conversion: 1 KiB -> 1024 byte', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await page.getByRole('tab', { name: '数据' }).click();
     await page.getByTestId('units-amount').fill('1');
     await page.getByTestId('units-from').selectOption('KiB');
@@ -556,7 +575,7 @@ test.describe('Units + Currency mode', () => {
   });
 
   test('swap button flips from/to', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await page.getByTestId('units-amount').fill('1');
     await expect(page.getByTestId('units-from')).toHaveValue('km');
     await expect(page.getByTestId('units-to')).toHaveValue('m');
@@ -566,7 +585,7 @@ test.describe('Units + Currency mode', () => {
   });
 
   test('currency shows snapshot stamp + USD/EUR conversion', async ({ page }) => {
-    await page.getByRole('tab', { name: '单位' }).click();
+    await tap(page, '单位');
     await page.getByRole('tab', { name: '货币' }).click();
     await expect(page.getByTestId('currency-snapshot')).toContainText('快照');
     await page.getByTestId('units-amount').fill('100');
@@ -579,27 +598,24 @@ test.describe('Units + Currency mode', () => {
 });
 
 test.describe('Programmer mode', () => {
-  test('Programmer tab is the 4th tab in the locked order', async ({ page }) => {
-    const labels = await page.getByRole('tab').allTextContents();
-    // locked: Basic / Scientific / History / Programmer / Units / Date / Chemistry
-    //   / Calculus / Loan / Tax / Kinship (TGC-22 added the last three)
-    expect(labels).toEqual(['基础', '科学', '历史', '程序员', '单位', '日期', '化学', '高数', '贷款', '个税', '亲戚称呼']);
-  });
+  // ponytail (TGC-23): "Programmer tab is the 4th tab in the locked order"
+  // asserted the top TabBar ordering, which is gone. Picker tile ordering
+  // is covered by tgc20-improvements.spec.ts. No replacement here.
 
   test('switching to Programmer hides the basic Display + Keypad', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await expect(page.getByTestId('programmer-mode')).toBeVisible();
     await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('HEX is the default radix and QWORD is the default word size', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await expect(page.getByTestId('prog-radix-hex')).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByTestId('prog-word-64')).toHaveAttribute('aria-checked', 'true');
   });
 
   test('hex letters A-F appear only when HEX is selected', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await expect(page.getByTestId('prog-key-A')).toBeVisible();
     await page.getByTestId('prog-radix-dec').click();
     await expect(page.getByTestId('prog-key-A')).toHaveCount(0);
@@ -608,7 +624,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('non-allowed digits are disabled per radix (8/9 in BIN; A-F in DEC)', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     // HEX: all enabled
     await expect(page.getByTestId('prog-key-8')).toBeEnabled();
     await expect(page.getByTestId('prog-key-A')).toBeEnabled();
@@ -622,7 +638,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('FF + 1 = 100 in HEX QWORD', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-add').click();
@@ -633,7 +649,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('radix table shows HEX/DEC/OCT/BIN all simultaneously', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     // 0xFF = 255 dec = 0o377 = 0b11111111
@@ -644,7 +660,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('switching radix reformats the last token via toRadix', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await page.getByTestId('prog-key-1').click();
     await page.getByTestId('prog-key-0').click(); // "10" in HEX = 16 dec
     await page.getByTestId('prog-radix-dec').click();
@@ -653,7 +669,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('switching word size re-masks (QWORD vs BYTE)', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     // QWORD: FF as HEX
@@ -666,7 +682,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('bitwise AND: 0xF0 & 0x0F = 0', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-0').click();
     await page.getByTestId('prog-key-and').click();
@@ -678,7 +694,7 @@ test.describe('Programmer mode', () => {
   });
 
   test('AC clears expression', async ({ page }) => {
-    await page.getByRole('tab', { name: '程序员' }).click();
+    await tap(page, '程序员');
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-F').click();
     await page.getByTestId('prog-key-ac').click();

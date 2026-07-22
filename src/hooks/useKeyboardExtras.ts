@@ -24,7 +24,16 @@ function isTextInputTarget(t: EventTarget | null): boolean {
   return t.isContentEditable;
 }
 
-export function useKeyboardExtras(calc: Calculator): void {
+// ponytail (TGC-23): Ctrl/Cmd+1..6 now goes through the same onModeChange
+// wrapper the picker uses, so the scientific mode lock actually fires when
+// the user presses Ctrl+2 (otherwise the bare calc.setMode would skip the
+// orientation lock and scientific would render in portrait). Caller passes
+// the wrapper; we fall back to calc.setMode if no wrapper is given (e.g.
+// in a story / test harness). See spec.md §3.9.
+export function useKeyboardExtras(
+  calc: Calculator,
+  onModeChange?: (m: Mode) => void,
+): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Don't hijack typing in inputs / contenteditable.
@@ -49,7 +58,9 @@ export function useKeyboardExtras(calc: Calculator): void {
 
       if (mod && !e.shiftKey && !e.altKey && MODE_KEYS[key]) {
         e.preventDefault();
-        calc.setMode(MODE_KEYS[key]);
+        const m = MODE_KEYS[key];
+        if (onModeChange) onModeChange(m);
+        else calc.setMode(m);
         return;
       }
 
@@ -66,5 +77,5 @@ export function useKeyboardExtras(calc: Calculator): void {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [calc]);
+  }, [calc, onModeChange]);
 }

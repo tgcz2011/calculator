@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-21 · Version: 0.8.0 · Status: 9 requested modules shipped.
+Last updated: 2026-07-22 · Version: 0.8.0 · Status: 9 requested modules shipped + TGC-23 UI polish in progress.
 
 ---
 
@@ -93,6 +93,15 @@ Last updated: 2026-07-21 · Version: 0.8.0 · Status: 9 requested modules shippe
 - **programmer**（`Programmer.tsx` + `engine/programmer.ts`）：BigInt QWORD 精确，HEX/DEC/OCT/BIN，位运算，字宽 8/16/32/64。
 - **basic**：加减乘除 + Apple 风格 percent/negate。
 
+### 2.8 TGC-23 改进（顶栏瘦身 + 字号动态 + 横竖屏）
+- **顶栏选择栏删除**：计算器页内不再渲染 `TabBar`（旧的 11 个 mode chip + DEG/RAD pill），改用首页 `CalculatorPicker` 作为唯一的模式选择入口。右上工具栏仅保留：返回首页 / 横竖屏 / 长宽比（仅 PC）/ 角度（仅 scientific）/ 语言 / 主题 / 同步。模式切换路径：返回首页 → 选 tile → 进入；或 Ctrl/Cmd+1..6（保留键盘快捷方式）。
+- **科学计算器强制横屏**：`applyOrientationForMode('scientific')` 调 `screen.orientation.lock('landscape')`；iOS Safari 不支持时显示可点 hint 让用户手动旋转；PC 已是横向，跳过 lock 避免误报 hint。Ctrl/Cmd+2 也走同一个 hook（见 §3.9）。
+- **电脑端长宽比锁定**：`@media (min-width: 1024px)` 下 `.shell[data-aspect='locked']` 强制 9/16 长宽比（手机壳样式），避免 PC 拖动窗口时计算器被拉变形。默认 ON，用户可用工具栏"长宽比" Pill 关闭；状态写 `calc:aspect-locked` localStorage。
+- **一键切换横竖屏（移动+PC）**：工具栏右上 `toggle-orientation` Pill **同时**在 mobile 和 PC 显示。
+  - 移动端：`orientation.toggle()` 调 `screen.orientation.lock(target)`；iOS Safari / 桌面浏览器不支持时降级为 no-op（不报错）。
+  - PC 端：因为 `screen.orientation` 不可用，按钮改为 toggle `aspectLocked`（locked=9/16 竖屏壳 / unlocked=横向 480px 列）。这给用户一个"PC 上也能横竖切换"的真实视觉效果，与长宽比 Pill 行为一致但语义不同。
+- **数字显示字号动态**：`--display-fs` 由 `clamp(56px, 9.5vw, 100px)` 提供基于视口的流体大小（最小值从 48 提到 56，读数更清楚）。当结果超长（多位数小数、错误信息等）时，`Display.tsx` 的 `useAutoShrinkFont` 用 `useLayoutEffect` 测量 `scrollWidth > clientWidth` 并按 0.9 倍率循环缩小直到合入，单次 effect 同步执行不触发 re-render。横屏 (`max-height: 500px`) 阈值降为 `clamp(32px, 8vh, 56px)`。
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）
@@ -133,6 +142,14 @@ Last updated: 2026-07-21 · Version: 0.8.0 · Status: 9 requested modules shippe
 - **坑**：KaTeX 渲染的 HTML 用 U+2212（数学减号）不是 ASCII `-`，`innerText` 断言数字会偶发失败。
 - **规约**：结果组件输出 `data-text` 明文镜像供 e2e 断言；不要直接断言 KaTeX 渲染 HTML 的文本。
 
+### 3.9 模式切换要走 orientation 包装（不是裸 setMode）
+- **坑**：TabBar 删了之后只剩 `useKeyboardExtras` 调 `calc.setMode`（裸 dispatch，不触发 `applyOrientationForMode`）。Ctrl/Cmd+2 进科学模式 → 表达式窗口看起来是科学，但屏幕没有自动横屏锁定，违反 §2.8。
+- **规约**：所有跨模式切换（TabBar 时代是 `handleModeChange`、未来 picker / 快捷键）必须经过 App 的 `applyOrientationForMode` 包装。`useKeyboardExtras` 接受 `onModeChange` 回调，App 把 `handleModeChange` 注入。直接 `calc.setMode` 只用于同 mode 内部状态（如科学模式里切 DEG/RAD）。
+
+### 3.10 动态字号收缩要同步测量，不能用 ResizeObserver 的异步回调
+- **坑**：结果超长时，用 `ResizeObserver` 异步缩字号会让第一帧先以 96px 渲染溢出再触发二次 layout，肉眼能看见"砰"地一下缩回去。e2e 拿 `scrollWidth > clientWidth` 断言时也会偶发抓到中间帧。
+- **规约**：`Display` 用 `useLayoutEffect` 同步跑"先清空 fontSize → 测量 → 若溢出按 0.9 折"循环。一次性同步测完，避免动画感。错误状态 clamp 到 22px 上限、不参与自动收缩（错误信息字号固定为小号红字）。
+
 ---
 
 ## 4. Tech Stack Constraints
@@ -152,3 +169,4 @@ Last updated: 2026-07-21 · Version: 0.8.0 · Status: 9 requested modules shippe
 - 严格 SemVer。`engine`/`history`/`sync` 签名改动至少 minor bump。
 - `./scripts/release.sh` 一键发版（要求 main + 干净 + tag 唯一）。先 bump `package.json` version 的 PR squash-merge，再在 main 跑 release.sh。
 - 0.8.0 = 9 模块全员首版（化学 #36 + 高数 #37 + 贷款/个税/亲戚/汇率 #38 + 既有科学/日期/单位/programmer）。
+- 0.8.1 = TGC-23 改进：顶栏 TabBar 移除 / 数字显示字号动态 / 横竖屏一键切换（移动+PC）/ 电脑长宽比保留。

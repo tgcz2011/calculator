@@ -1,7 +1,8 @@
 // en-US dictionary — mirrors zh.ts. Keep keys 1:1 so the i18n module's
 // fallback (zh) catches every missing string during development.
 export const en: Record<string, string> = {
-  // TabBar / modes
+  // Modes (referenced from the picker tiles and the now-removed top TabBar;
+  // the labels stay in the dictionary so the picker tiles can localize).
   'mode.basic': 'Basic',
   'mode.scientific': 'Scientific',
   'mode.history': 'History',
@@ -29,6 +30,8 @@ export const en: Record<string, string> = {
   'common.clear': 'Clear',
   'common.home': 'Back to calculator picker',
   'common.rotate': 'Toggle screen orientation',
+  'common.rotate.desktopLocked': 'Unlock to wide layout',
+  'common.rotate.desktopUnlocked': 'Lock to portrait shell',
   'common.aspect.lock': 'Lock aspect ratio',
   'common.aspect.unlock': 'Unlock aspect ratio',
   'app.hint.rotate.tap': 'Tap here for landscape · expands scientific functions',

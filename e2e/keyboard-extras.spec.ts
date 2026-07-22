@@ -71,43 +71,33 @@ test.describe('Keyboard extras', () => {
 
   test('Ctrl+3 switches to History mode', async ({ page }) => {
     await page.keyboard.press('Control+3');
-    await expect(page.getByRole('tab', { name: 'History' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    // ponytail (TGC-23): no more top TabBar. Assert the HistoryList is
+    // active — when history is empty it shows the "no history yet" empty
+    // state; after a calc it shows the section title + items. Either path
+    // is fine for proving Ctrl+3 routed us to history mode.
+    await expect(page.locator("text=No history yet")).toBeVisible();
   });
 
   test('Ctrl+4 switches to Programmer mode', async ({ page }) => {
     await page.keyboard.press('Control+4');
-    await expect(page.getByRole('tab', { name: 'Programmer' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    await expect(page.getByTestId('programmer-mode')).toBeVisible();
   });
 
   test('Ctrl+5 switches to Units mode', async ({ page }) => {
     await page.keyboard.press('Control+5');
-    await expect(page.getByRole('tab', { name: 'Units' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    await expect(page.getByTestId('units-mode')).toBeVisible();
   });
 
   test('Ctrl+6 switches to Date mode', async ({ page }) => {
     await page.keyboard.press('Control+6');
-    await expect(page.getByRole('tab', { name: 'Date' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    await expect(page.getByTestId('date-mode')).toBeVisible();
   });
 
   test('Ctrl+1 returns to Basic mode', async ({ page }) => {
     await page.keyboard.press('Control+3');
     await page.keyboard.press('Control+1');
-    await expect(page.getByRole('tab', { name: 'Basic' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    // Basic mode renders the expression input (basic/scientific share it).
+    await expect(page.locator('input[aria-label="Expression"]')).toBeVisible();
   });
 
   test('ArrowLeft moves cursor back; ArrowRight moves it forward', async ({ page }) => {

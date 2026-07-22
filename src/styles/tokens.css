@@ -52,8 +52,12 @@
   --dur: 180ms;
   --dur-slow: 360ms;
 
-  /* Display sizing - fluid with viewport width */
-  --display-fs: clamp(48px, 9vw, 96px);
+  /* Display sizing - fluid with viewport width.
+     TGC-23: bumped the floor (48→56) and the ceiling (96→100) so the live
+     result reads larger on phones. When the result overflows the container
+     width, Display.tsx's useAutoShrinkFont post-processes the size down in
+     0.9× steps so long expressions / errors stay inside the display column. */
+  --display-fs: clamp(56px, 9.5vw, 100px);
   --display-fs-expr: clamp(20px, 4vw, 30px);
 
   /* Keypad sizing - 56-76px tall, 4-col layout on phone, comfortable on tablet.
@@ -79,10 +83,14 @@
    Key + display sizing switches from vw to vh so 6+ rows of keys don't
    overflow the available height. Without this, a phone in landscape
    (375px tall) would compute --key-size = clamp(56, 13vw=106, 76) = 76px,
-   and 6 rows × 84px = 504px > 375px → keypad overflows into the display. === */
+   and 6 rows × 84px = 504px > 375px → keypad overflows into the display.
+
+   TGC-23: bumped the floor (28→32) so the live result still reads at a
+   comfortable size on a rotated phone. The auto-shrink in Display.tsx
+   handles the long-result case. === */
 @media (orientation: landscape) and (max-height: 500px) {
   :root {
-    --display-fs: clamp(28px, 8vh, 48px);
+    --display-fs: clamp(32px, 8vh, 56px);
     --display-fs-expr: clamp(14px, 3vh, 20px);
     --key-size: clamp(36px, 10vh, 52px);
     --key-fs: clamp(13px, 3vh, 18px);

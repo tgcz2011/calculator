@@ -1,5 +1,5 @@
-// Shared Chip component - used by TabBar (top-level modes), Units / DateTime
-// sub-tabs, and Programmer radix / word-size pickers. Two shapes:
+// Shared Chip component - used by Units / DateTime sub-tabs, Programmer
+// radix / word-size pickers, and the Loan / Tax / Advanced sub-tabs. Two shapes:
 //   - Chip         : a single pill (segmented control option)
 //   - ChipSegment  : the rounded background container holding multiple chips
 // Visual states (active / inactive) are CSS-driven via aria-selected / aria-checked
