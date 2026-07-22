@@ -119,7 +119,7 @@ const LETTER_KEY_MAP: Record<string, string> = (() => {
 // Display do its thing.
 function isExpressionInputTarget(t: EventTarget | null): boolean {
   return (
-    t instanceof HTMLInputElement &&
+    (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) &&
     t.getAttribute('aria-label') === 'Expression'
   );
 }
@@ -137,10 +137,10 @@ function isExpressionInputTarget(t: EventTarget | null): boolean {
 // typing), so it's excluded here and keeps its existing TGC-20 behavior -
 // isExpressionInputTarget() still owns its Enter/Backspace/Escape skipping.
 function isEditableFieldTarget(t: EventTarget | null): boolean {
-  if (t instanceof HTMLInputElement) {
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement) {
     return t.getAttribute('aria-label') !== 'Expression';
   }
-  return t instanceof HTMLTextAreaElement;
+  return false;
 }
 
 export default function App() {
@@ -376,15 +376,7 @@ export default function App() {
         data-aspect={aspectLocked ? 'locked' : 'auto'}
         data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'flex-end',
-            gap: 'var(--s-2)',
-            padding: 'var(--s-3) var(--s-4)',
-          }}
-        >
+        <div className="app-toolbar app-toolbar--picker">
           {dataDesktop && (
             <Pill
               onClick={() => setAspectLocked((v) => !v)}
@@ -394,6 +386,13 @@ export default function App() {
               <span aria-hidden style={{ fontSize: 16 }}>{aspectLocked ? '\u{1F512}' : '\u{1F513}'}</span>
             </Pill>
           )}
+          <Pill
+            onClick={() => onPick('history')}
+            ariaLabel={t('mode.history')}
+            testId="open-history-picker"
+          >
+            <span aria-hidden style={{ fontSize: 16 }}>{'◷'}</span>
+          </Pill>
           <Pill
             onClick={toggleLocale}
             ariaLabel={locale === 'zh' ? t('common.lang.zh') : t('common.lang.en')}
@@ -433,17 +432,7 @@ export default function App() {
       data-force-landscape={forceLandscape ? 'true' : 'false'}
       data-platform={isMobileNative ? 'native' : isDesktop ? 'desktop' : isWeb ? 'web' : 'unknown'}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'flex-end',
-          gap: 'var(--s-2)',
-          padding: 'var(--s-3) var(--s-4)',
-          position: 'relative',
-          zIndex: 'var(--z-tabbar)',
-        }}
-      >
+      <div className="app-toolbar">
         {calc.state.mode === 'scientific' && (
           <Pill
             size="lg"
@@ -461,6 +450,15 @@ export default function App() {
         >
           <span aria-hidden style={{ fontSize: 16 }}>{'\u2302'}</span>
         </Pill>
+        {calc.state.mode !== 'history' && (
+          <Pill
+            onClick={() => handleModeChange('history')}
+            ariaLabel={t('mode.history')}
+            testId="open-history"
+          >
+            <span aria-hidden style={{ fontSize: 16 }}>{'◷'}</span>
+          </Pill>
+        )}
         <Pill
           onClick={() => {
             // ponytail (TGC-23): mobile flips real screen.orientation; on
@@ -481,7 +479,8 @@ export default function App() {
           }
           testId="toggle-orientation"
         >
-          <span aria-hidden style={{ fontSize: 16 }}>{orientation.orientation === 'landscape' ? '\u2191' : '\u2197'}</span>
+          <span aria-hidden style={{ fontSize: 16 }}>{'↻'}</span>
+          <span>{t('common.rotate.short')}</span>
         </Pill>
         {dataDesktop && (
           <Pill

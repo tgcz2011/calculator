@@ -7,11 +7,12 @@
 // multi-input forms. We debounce-record into history so the user's recent
 // tax scenarios show up alongside arithmetic history.
 
-import { useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { history } from '../history/api';
 import { Chip, ChipSegment } from './Chip';
 import { Panel } from './Panel';
+import { Key } from './Key';
 import {
   ANNUAL_THRESHOLD,
   EMPTY_DEDUCTIONS,
@@ -32,9 +33,17 @@ const TABS: { id: Tab; labelKey: string }[] = [
   { id: 'grossup', labelKey: 'tax.tab.grossup' },
 ];
 
+type NumericTarget = {
+  value: string;
+  onChange(value: string): void;
+};
+
+const NumericKeyboardContext = createContext<(target: NumericTarget) => void>(() => {});
+
 export function Tax() {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('comprehensive');
+  const [activeInput, setActiveInput] = useState<NumericTarget | null>(null);
 
   // Comprehensive
   const [income, setIncome] = useState('300000');
@@ -135,8 +144,9 @@ export function Tax() {
   }, [tab, income, comprehensiveRes.tax, bonusAmount, bonusRecommend.preferred, bonusTracks, targetNet, grossupResult]);
 
   return (
-    <div
-      style={{
+    <NumericKeyboardContext.Provider value={setActiveInput}>
+      <div
+        style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -195,6 +205,80 @@ export function Tax() {
           t={t}
         />
       )}
+        {activeInput && (
+          <NumericTouchKeyboard setActive={setActiveInput} t={t} />
+        )}
+      </div>
+    </NumericKeyboardContext.Provider>
+  );
+}
+
+function NumericInput({
+  value,
+  onChange,
+  testId,
+}: {
+  value: string;
+  onChange(value: string): void;
+  testId?: string;
+}) {
+  const select = useContext(NumericKeyboardContext);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      className="ui-field-input"
+      value={value}
+      onFocus={() => select({ value, onChange })}
+      onChange={(event) => {
+        const next = event.target.value;
+        onChange(next);
+        select({ value: next, onChange });
+      }}
+      data-testid={testId}
+    />
+  );
+}
+
+function NumericTouchKeyboard({
+  setActive,
+  t,
+}: {
+  setActive: React.Dispatch<React.SetStateAction<NumericTarget | null>>;
+  t(key: string): string;
+}) {
+  const apply = (operation: (value: string) => string) => {
+    setActive((current) => {
+      if (!current) return current;
+      const next = operation(current.value);
+      current.onChange(next);
+      return { ...current, value: next };
+    });
+  };
+  const keys = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '0', '.', '⌫'];
+  return (
+    <div className="touch-keyboard" data-testid="tax-touch-keyboard" aria-label={t('tax.keyboard')}>
+      {keys.map((key) => (
+        <Key
+          key={key}
+          label={key}
+          variant={key === '⌫' ? 'fn' : 'num'}
+          size="compact"
+          mono
+          onClick={() => apply((value) => key === '⌫' ? value.slice(0, -1) : key === '.' && value.includes('.') ? value : value + key)}
+          ariaLabel={key === '⌫' ? t('key.backspace') : key}
+          testId={`tax-key-${key === '⌫' ? 'backspace' : key}`}
+        />
+      ))}
+      <Key
+        label={t('common.clear')}
+        variant="danger"
+        size="compact"
+        onClick={() => apply(() => '')}
+        ariaLabel={t('common.clear')}
+        testId="tax-key-clear"
+        style={{ gridColumn: '1 / -1' }}
+      />
     </div>
   );
 }
@@ -241,12 +325,10 @@ function ComprehensiveView({
   return (
     <>
       <Field label={t('tax.field.income')} testId="tax-income">
-        <input type="number" className="ui-field-input" value={income} step="any"
-          onChange={(e) => onIncome(e.target.value)} data-testid="tax-income-input" />
+        <NumericInput value={income} onChange={onIncome} testId="tax-income-input" />
       </Field>
       <Field label={t('tax.field.social')} testId="tax-social">
-        <input type="number" className="ui-field-input" value={social} step="any"
-          onChange={(e) => onSocial(e.target.value)} data-testid="tax-social-input" />
+        <NumericInput value={social} onChange={onSocial} testId="tax-social-input" />
       </Field>
       <Panel testId="tax-deductions">
         <span className="ui-panel-label">{t('tax.deductions.title')}</span>
@@ -298,14 +380,7 @@ function NumberField({
 }) {
   return (
     <Field label={label} testId={testId}>
-      <input
-        type="number"
-        className="ui-field-input"
-        value={value}
-        step="any"
-        onChange={(e) => onChange(e.target.value)}
-        data-testid={testId ? `${testId}-input` : undefined}
-      />
+      <NumericInput value={value} onChange={onChange} testId={testId ? `${testId}-input` : undefined} />
     </Field>
   );
 }
@@ -333,16 +408,13 @@ function BonusView({
   return (
     <>
       <Field label={t('tax.field.bonus')} testId="tax-bonus">
-        <input type="number" className="ui-field-input" value={bonusAmount} step="any"
-          onChange={(e) => onBonusAmount(e.target.value)} data-testid="tax-bonus-input" />
+        <NumericInput value={bonusAmount} onChange={onBonusAmount} testId="tax-bonus-input" />
       </Field>
       <Field label={t('tax.field.income')} testId="tax-bonus-income">
-        <input type="number" className="ui-field-input" value={bonusIncome} step="any"
-          onChange={(e) => onBonusIncome(e.target.value)} data-testid="tax-bonus-income-input" />
+        <NumericInput value={bonusIncome} onChange={onBonusIncome} testId="tax-bonus-income-input" />
       </Field>
       <Field label={t('tax.field.social')} testId="tax-bonus-social">
-        <input type="number" className="ui-field-input" value={bonusSocial} step="any"
-          onChange={(e) => onBonusSocial(e.target.value)} data-testid="tax-bonus-social-input" />
+        <NumericInput value={bonusSocial} onChange={onBonusSocial} testId="tax-bonus-social-input" />
       </Field>
       <Panel testId="tax-bonus-deductions">
         <span className="ui-panel-label">{t('tax.deductions.title')}</span>
@@ -419,12 +491,10 @@ function GrossupView({
   return (
     <>
       <Field label={t('tax.field.netMonthly')} testId="tax-target-net">
-        <input type="number" className="ui-field-input" value={targetNet} step="any"
-          onChange={(e) => onTargetNet(e.target.value)} data-testid="tax-target-net-input" />
+        <NumericInput value={targetNet} onChange={onTargetNet} testId="tax-target-net-input" />
       </Field>
       <Field label={t('tax.field.social')} testId="tax-grossup-social">
-        <input type="number" className="ui-field-input" value={social} step="any"
-          onChange={(e) => onSocial(e.target.value)} data-testid="tax-grossup-social-input" />
+        <NumericInput value={social} onChange={onSocial} testId="tax-grossup-social-input" />
       </Field>
       <Panel testId="tax-grossup-deductions">
         <span className="ui-panel-label">{t('tax.deductions.title')}</span>

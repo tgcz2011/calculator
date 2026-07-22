@@ -7,11 +7,12 @@
 // path is its own sub-module, not routed through engine.evaluate(). Mirrors
 // Programmer.tsx's self-contained pattern.
 
-import { type CSSProperties, type ReactNode, useCallback, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useRef, useState } from 'react';
 import { balanceReaction, type BalanceResult } from '../chemistry/balancer';
 import { useI18n } from '../hooks/useI18n';
 import { Chip, ChipSegment } from './Chip';
 import { Panel, PanelLabel, Pill } from './Panel';
+import { Key } from './Key';
 
 const EXAMPLES: string[] = [
   'H2 + O2 -> H2O',
@@ -22,10 +23,51 @@ const EXAMPLES: string[] = [
   'KMnO4 + HCl -> KCl + MnCl2 + H2O + Cl2',
 ];
 
+const CHEM_KEYS = [
+  { label: 'H', value: 'H' }, { label: 'C', value: 'C' },
+  { label: 'N', value: 'N' }, { label: 'O', value: 'O' },
+  { label: 'Na', value: 'Na' }, { label: 'Cl', value: 'Cl' },
+  { label: '(', value: '(' }, { label: ')', value: ')' },
+  { label: '₂', value: '2' }, { label: '₃', value: '3' },
+  { label: '₄', value: '4' }, { label: '₅', value: '5' },
+  { label: '₆', value: '6' }, { label: '₇', value: '7' },
+  { label: '₈', value: '8' }, { label: '₉', value: '9' },
+  { label: '+', value: ' + ' }, { label: '→', value: ' -> ' },
+  { label: '·', value: '·' },
+] as const;
+
 export function ChemBalancer() {
   const { t } = useI18n();
   const [input, setInput] = useState('');
   const [result, setResult] = useState<BalanceResult | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const insertToken = useCallback((token: string) => {
+    const element = inputRef.current;
+    const start = element?.selectionStart ?? input.length;
+    const end = element?.selectionEnd ?? start;
+    const next = input.slice(0, start) + token + input.slice(end);
+    setInput(next);
+    const cursor = start + token.length;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(cursor, cursor);
+    });
+  }, [input]);
+
+  const backspaceToken = useCallback(() => {
+    const element = inputRef.current;
+    const start = element?.selectionStart ?? input.length;
+    const end = element?.selectionEnd ?? start;
+    if (start === 0 && end === 0) return;
+    const from = start === end ? start - 1 : start;
+    const next = input.slice(0, from) + input.slice(end);
+    setInput(next);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(from, from);
+    });
+  }, [input]);
 
   const run = useCallback((expr: string) => {
     setInput(expr);
@@ -60,6 +102,7 @@ export function ChemBalancer() {
       <label className="ui-field">
         <span className="ui-field-label">{t('chem.input.label')}</span>
         <input
+          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -73,6 +116,29 @@ export function ChemBalancer() {
           spellCheck={false}
         />
       </label>
+
+      <div className="touch-keyboard chem-keyboard" data-testid="chem-touch-keyboard" aria-label={t('chem.keyboard')}>
+        {CHEM_KEYS.map((key) => (
+          <Key
+            key={`${key.label}-${key.value}`}
+            label={key.label}
+            variant={/[₂-₉]/.test(key.label) ? 'num' : 'fn'}
+            size="compact"
+            mono
+            onClick={() => insertToken(key.value)}
+            ariaLabel={key.label}
+            testId={`chem-key-${key.value.trim() || 'space'}`}
+          />
+        ))}
+        <Key
+          label="⌫"
+          variant="danger"
+          size="compact"
+          onClick={backspaceToken}
+          ariaLabel={t('key.backspace')}
+          testId="chem-key-backspace"
+        />
+      </div>
 
       <div style={{ display: 'flex', gap: 'var(--s-2)' }}>
         <Pill onClick={onBalance} testId="chem-balance" ariaLabel={t('chem.balance')}>

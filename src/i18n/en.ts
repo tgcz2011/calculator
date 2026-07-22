@@ -30,6 +30,7 @@ export const en: Record<string, string> = {
   'common.clear': 'Clear',
   'common.home': 'Back to calculator picker',
   'common.rotate': 'Toggle screen orientation',
+  'common.rotate.short': 'Rotate',
   'common.rotate.desktopLocked': 'Unlock to wide layout',
   'common.rotate.desktopUnlocked': 'Lock to portrait shell',
   'common.aspect.lock': 'Lock aspect ratio',
@@ -167,6 +168,7 @@ export const en: Record<string, string> = {
   'tax.compare.title': 'Compare tracks',
   'tax.bonus.separate': 'Separate',
   'tax.bonus.combined': 'Combined',
+  'tax.keyboard': 'Touch number pad',
 
   // Kin mode
   'kin.field.expr': 'Relationship chain (e.g. "dad\'s mom")',
@@ -208,6 +210,7 @@ export const en: Record<string, string> = {
   'chem.conservation.reactants': 'Reactants',
   'chem.conservation.products': 'Products',
   'chem.charge': 'Charge',
+  'chem.keyboard': 'Chemical subscript keypad',
 
   // Advanced math mode
   'adv.tab.solve': 'Solve',
