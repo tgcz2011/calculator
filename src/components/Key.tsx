@@ -79,7 +79,7 @@ export function Key({
     // override and cause button overlap in landscape on phones.
     height: compact ? 'var(--key-size-compact)' : 'var(--key-size)',
     minHeight: compact ? 'var(--key-size-compact)' : 'var(--key-size)',
-    margin: 'var(--s-1)',
+    margin: 0,
     borderRadius: 'var(--radius-full)',
     fontSize: compact ? 'var(--key-fs-compact)' : 'var(--key-fs)',
     fontWeight: 500,

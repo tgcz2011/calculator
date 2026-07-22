@@ -64,6 +64,9 @@ export function Keypad(props: Props) {
         // shrinks and scrolls internally if it doesn't fit.
         overflow: 'auto',
         flexShrink: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--s-2)',
       } as React.CSSProperties}
     >
       {props.scientific && (
@@ -75,8 +78,7 @@ export function Keypad(props: Props) {
             // key size keeps each button readable without dominating the layout.
             display: 'grid',
             gridTemplateColumns: 'repeat(6, 1fr)',
-            gap: 0,
-            marginBottom: 'var(--s-1)',
+            gap: 'var(--s-2)',
           }}
         >
           {SCI_FUNCS.map((fn) => (
@@ -137,7 +139,7 @@ export function Keypad(props: Props) {
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gridTemplateRows: 'repeat(2, var(--key-size))',
-          gap: 0,
+          gap: 'var(--s-2)',
         }}
       >
         <Key label="1" variant="num" onClick={() => props.onInsert('1')} style={{ gridColumn: '1', gridRow: '1' }} />
@@ -159,5 +161,5 @@ export function Keypad(props: Props) {
 }
 
 function Row({ children }: { children: React.ReactNode }) {
-  return <div style={{ display: 'flex' }}>{children}</div>;
+  return <div style={{ display: 'flex', gap: 'var(--s-2)' }}>{children}</div>;
 }

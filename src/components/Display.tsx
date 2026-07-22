@@ -146,7 +146,7 @@ export function Display(props: Props) {
     letterSpacing: '-0.03em',
     lineHeight: 1.05,
     textAlign: 'right',
-    padding: 'var(--s-2) var(--s-4) 0',
+    padding: '0 var(--s-4)',
     minHeight: '1.2em',
     fontVariantNumeric: 'tabular-nums',
     overflowWrap: 'break-word',

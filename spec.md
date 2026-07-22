@@ -93,7 +93,11 @@ Last updated: 2026-07-22 · Version: 0.0.0.0 · Status: 9 requested modules ship
 - **programmer**（`Programmer.tsx` + `engine/programmer.ts`）：BigInt QWORD 精确，HEX/DEC/OCT/BIN，位运算，字宽 8/16/32/64。
 - **basic**：加减乘除 + Apple 风格 percent/negate。
 
-### 2.8 TGC-23 改进（顶栏瘦身 + 字号动态 + 横竖屏）
+### 2.9 TGC-24 layout polish
+- Calculator keys use container gaps instead of per-button margins, preventing outer-edge overflow and overlapping hit areas while preserving consistent Apple-style spacing.
+- Display expression and result share balanced vertical padding so short results do not leave excessive empty space and long results do not crowd the keypad.
+- Scientific mode keeps the TGC-23 orientation lock and desktop aspect-ratio behavior unchanged; its keypad layout remains scroll-safe when the available height is constrained.
+
 - **顶栏选择栏删除**：计算器页内不再渲染 `TabBar`（旧的 11 个 mode chip + DEG/RAD pill），改用首页 `CalculatorPicker` 作为唯一的模式选择入口。右上工具栏仅保留：返回首页 / 横竖屏 / 长宽比（仅 PC）/ 角度（仅 scientific）/ 语言 / 主题 / 同步。模式切换路径：返回首页 → 选 tile → 进入；或 Ctrl/Cmd+1..6（保留键盘快捷方式）。
 - **科学计算器强制横屏**：`applyOrientationForMode('scientific')` 调 `screen.orientation.lock('landscape')`；iOS Safari 不支持时显示可点 hint 让用户手动旋转；PC 已是横向，跳过 lock 避免误报 hint。Ctrl/Cmd+2 也走同一个 hook（见 §3.9）。
 - **电脑端长宽比锁定**：`@media (min-width: 1024px)` 下 `.shell[data-aspect='locked']` 强制 9/16 长宽比（手机壳样式），避免 PC 拖动窗口时计算器被拉变形。默认 ON，用户可用工具栏"长宽比" Pill 关闭；状态写 `calc:aspect-locked` localStorage。
