@@ -211,7 +211,7 @@ test.describe('#2 display-area: expression/result visually adjacent, no pointles
       'Display layout test runs on phone/desktop - tablet is between them.',
     );
     await page.getByTestId('picker-tile-basic').click();
-    const expr = page.locator('main.shell input[aria-label="Expression"]');
+    const expr = page.locator('main.shell textarea[aria-label="Expression"]');
     const result = page.locator('main.shell [aria-live="polite"]').first();
     // Long enough to overflow the display input on every viewport we test.
     await expr.evaluate((el) => (el as HTMLInputElement).focus());
@@ -221,13 +221,28 @@ test.describe('#2 display-area: expression/result visually adjacent, no pointles
     const resultBox = await result.boundingBox();
     expect(exprBox, 'expression bounding box').toBeTruthy();
     expect(resultBox, 'result bounding box').toBeTruthy();
-    // The expression input overflowed (scrollWidth > clientWidth) - if not,
-    // the test setup is wrong, not the calculator.
-    const overflows = await expr.evaluate((el) => {
-      const i = el as HTMLInputElement;
-      return i.scrollWidth > i.clientWidth + 1;
+    // ponytail (TGC-27 #2): long expressions now wrap onto multiple lines
+    // instead of horizontal-scrolling. The user-visible input is preserved
+    // and the textarea grows vertically so nothing is hidden. Verify the
+    // input now wraps AND has no horizontal overflow.
+    const { wraps, overflows } = await expr.evaluate((element) => {
+      const ta = element as HTMLTextAreaElement;
+      const cs = getComputedStyle(ta);
+      const fs = parseFloat(cs.fontSize);
+      const rawLh = parseFloat(cs.lineHeight);
+      const lh = Number.isFinite(rawLh) && rawLh > 0 ? rawLh : fs * 1.4;
+      const i = {
+        scrollWidth: ta.scrollWidth,
+        clientWidth: ta.clientWidth,
+        scrollHeight: ta.scrollHeight,
+      };
+      return {
+        wraps: i.scrollHeight > lh * 1.5,
+        overflows: i.scrollWidth > i.clientWidth + 1,
+      };
     });
-    expect(overflows, 'expression overflows horizontally').toBe(true);
+    expect(wraps, 'long expression wraps onto multiple lines').toBe(true);
+    expect(overflows, 'long expression does NOT overflow horizontally').toBe(false);
     // The result must sit DIRECTLY below the expression - vertical gap
     // should be small (<= display-area padding, not a centered auto-margin).
     // Old behavior: `margin: 0 auto` on the result pushed it into the
@@ -255,7 +270,7 @@ test.describe('#2 display-area: expression/result visually adjacent, no pointles
     );
     await page.getByTestId('picker-tile-scientific').click();
     await page.waitForTimeout(200);
-    const expr = page.locator('main.shell input[aria-label="Expression"]');
+    const expr = page.locator('main.shell textarea[aria-label="Expression"]');
     // Desktop scientific: long keypad pushes expression input out of the
     // visible area; force-focus via JS so we can type into it regardless
     // of layout. The whole point is the result sits adjacent to the
@@ -576,7 +591,7 @@ test.describe('#4 rotate button drives visible state change on every platform', 
 test.describe('#5 calculator isolation: drafts and history do not leak', () => {
   test('basic draft survives switching to scientific and back', async ({ page }) => {
     await page.getByTestId('picker-tile-basic').click();
-    const expr = page.locator('main.shell input[aria-label="Expression"]');
+    const expr = page.locator('main.shell textarea[aria-label="Expression"]');
     await expr.evaluate((el) => (el as HTMLInputElement).focus());
     // Note: `*` on the keyboard is mapped to the calculator's × glyph
     // (see App.tsx handleKey map: `'*': '×'`). Match the rendered value.
@@ -589,19 +604,19 @@ test.describe('#5 calculator isolation: drafts and history do not leak', () => {
     // input. The picker is the supported switching path here).
     await page.getByTestId('exit-to-picker').click();
     await page.getByTestId('picker-tile-scientific').click();
-    const sciExpr = page.locator('main.shell input[aria-label="Expression"]');
+    const sciExpr = page.locator('main.shell textarea[aria-label="Expression"]');
     // Display.tsx renders '0' as the placeholder when expression is empty.
     await expect(sciExpr).toHaveValue('0');
     // Switch back to basic via picker, expect draft to come back.
     await page.getByTestId('exit-to-picker').click();
     await page.getByTestId('picker-tile-basic').click();
-    const basicExprAgain = page.locator('main.shell input[aria-label="Expression"]');
+    const basicExprAgain = page.locator('main.shell textarea[aria-label="Expression"]');
     await expect(basicExprAgain).toHaveValue('7×8');
   });
 
   test('scientific draft survives a round-trip through chem and tax', async ({ page }) => {
     await page.getByTestId('picker-tile-scientific').click();
-    const expr = page.locator('main.shell input[aria-label="Expression"]');
+    const expr = page.locator('main.shell textarea[aria-label="Expression"]');
     await expr.evaluate((el) => (el as HTMLInputElement).focus());
     await page.keyboard.type('pi+1');
     await expect(expr).toHaveValue('pi+1');
@@ -611,13 +626,13 @@ test.describe('#5 calculator isolation: drafts and history do not leak', () => {
     await page.getByTestId('chem-input').fill('H2 + O2');
     await page.getByTestId('exit-to-picker').click();
     await page.getByTestId('picker-tile-scientific').click();
-    const sciExpr = page.locator('main.shell input[aria-label="Expression"]');
+    const sciExpr = page.locator('main.shell textarea[aria-label="Expression"]');
     await expect(sciExpr).toHaveValue('pi+1');
   });
 
   test('committed basic history appears in basic view, NOT in scientific view', async ({ page }) => {
     await page.getByTestId('picker-tile-basic').click();
-    const expr = page.locator('main.shell input[aria-label="Expression"]');
+    const expr = page.locator('main.shell textarea[aria-label="Expression"]');
     await expr.evaluate((el) => (el as HTMLInputElement).focus());
     await page.keyboard.type('3+4');
     await page.keyboard.press('Enter');
@@ -634,7 +649,7 @@ test.describe('#5 calculator isolation: drafts and history do not leak', () => {
 
   test('committed scientific history appears in scientific view, NOT in basic view', async ({ page }) => {
     await page.getByTestId('picker-tile-scientific').click();
-    const expr = page.locator('main.shell input[aria-label="Expression"]');
+    const expr = page.locator('main.shell textarea[aria-label="Expression"]');
     await expr.evaluate((el) => (el as HTMLInputElement).focus());
     await page.keyboard.type('5+6');
     await page.keyboard.press('Enter');
@@ -697,7 +712,7 @@ test.describe('#5 calculator isolation: drafts and history do not leak', () => {
     await page.getByTestId('tax-touch-keyboard').locator('button:has-text("5")').click();
     await expect(page.getByTestId('tax-income-input')).toHaveValue(/5/);
     // Basic expression input shouldn't exist while tax is active.
-    await expect(page.locator('main.shell input[aria-label="Expression"]')).toHaveCount(0);
+    await expect(page.locator('main.shell textarea[aria-label="Expression"]')).toHaveCount(0);
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '5-tax-keypad.png') });
   });
 });

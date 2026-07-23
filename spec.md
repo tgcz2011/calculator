@@ -129,6 +129,10 @@ Last updated: 2026-07-22 · Version: 0.2.0.0 · Status: 9 requested modules ship
 - Chemistry input uses three switchable touch-keyboard pages: digits, the complete Latin alphabet, and parser-supported symbols including grouping, hydrate, charge, reaction, and equilibrium tokens.
 - Calculator components remain mounted while switching modes so each calculator keeps its own temporary input. Basic/scientific reducer drafts and history views are scoped by calculator; legacy unscoped history belongs to Basic.
 
+### 2.14 TGC-27 long-expression wrap + transform containment fixes
+- **#1 菜单/弹层被遮根因**：picker/units/programmer/chem 的 `ChipSegment` 用 `flex-wrap: wrap` + `overflow: visible` 取代 `overflow-x: auto`（隐藏滚动条 + 卡片 `overflow: hidden`），窄视口（phone-portrait + 9:16 锁定壳、旋转 scientific）下分类标签不再被右切。`.app-toolbar` 同上：wrap + visible，所有 pill 直接可见。`.shell[data-desktop='true']` 与 `.shell[data-force-landscape='true']` 把 `overflow: hidden` 换成 `clip-path: inset(0 …)`，保留圆角阴影但允许 `<select>` / 下拉 / native 弹层溢出 containing block。
+- **#2 长输入多行换行根因**：`Display.tsx` 把 expression 从 `<input>` 换成 `<textarea>`（readOnly、自动 `height = scrollHeight` 撑高），`whiteSpace: pre-wrap` + `wordBreak: break-all` + `overflowWrap: anywhere`，70+ 数字直接折行铺满多行，删掉"强制 1 行"的 `useLayoutEffect` 0.4× 自动收缩。result 也改为 `overflow-wrap: anywhere` + `word-break: break-all`，允许数字结果自然换行，不再被压成 0.4× 字号。
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）

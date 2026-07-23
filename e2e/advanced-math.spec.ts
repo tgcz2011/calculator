@@ -26,7 +26,7 @@ async function resultText(page: import('@playwright/test').Page): Promise<string
 test.describe('Advanced math calculator', () => {
   test('switching to Calculus hides the basic Display + Keypad', async ({ page }) => {
     await expect(page.getByTestId('adv-mode')).toBeVisible();
-    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+    await expect(page.locator('main textarea[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('seven sub-tabs are present; derivative is the default', async ({ page }) => {

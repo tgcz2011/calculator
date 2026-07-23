@@ -1,4 +1,4 @@
-import { type CSSProperties, type KeyboardEvent, useEffect, useLayoutEffect, useRef } from 'react';
+import { type CSSProperties, type KeyboardEvent, useEffect, useRef } from 'react';
 import { localizeErrorMessage, type Locale } from '../i18n';
 
 // ponytail: one Unicode glyph per error code, semantically chosen:
@@ -44,13 +44,21 @@ interface Props {
 }
 
 export function Display(props: Props) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const safe = Math.max(0, Math.min(props.cursor, props.expression.length));
     if (document.activeElement === el) el.setSelectionRange(safe, safe);
-    if (safe === props.expression.length) el.scrollLeft = el.scrollWidth;
+    // ponytail (TGC-27 #2): the expression now wraps onto multiple lines
+    // (long inputs split visually). Auto-grow the textarea so the user sees
+    // every line without scrolling, and keep the cursor at the end so the
+    // wrap "follows" the typing edge instead of pinning to the top.
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+    if (safe === props.expression.length) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [props.cursor, props.expression]);
 
   function onSelect() {
@@ -60,7 +68,7 @@ export function Display(props: Props) {
     props.onCursor(start);
   }
 
-  function onKey(e: KeyboardEvent<HTMLInputElement>) {
+  function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter') {
       e.preventDefault();
       props.onEquals();
@@ -137,7 +145,14 @@ export function Display(props: Props) {
     fontFamily: 'inherit',
     minWidth: 0,
     maxWidth: '100%',
-    overflowX: 'auto',
+    // ponytail (TGC-27 #2): a textarea instead of an input so long numeric
+    // strings (70+ digits) wrap onto multiple visible lines instead of
+    // horizontal-scrolling out of view. Auto-grow height in useEffect above.
+    resize: 'none',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-all',
+    overflowWrap: 'anywhere',
+    overflowY: 'hidden',
   };
 
   const resultStyle: CSSProperties = {
@@ -152,68 +167,20 @@ export function Display(props: Props) {
     padding: '0 var(--s-4)',
     minHeight: '1.2em',
     fontVariantNumeric: 'tabular-nums',
-    overflowWrap: 'break-word',
+    // ponytail (TGC-27 #2): the result may also wrap onto multiple lines
+    // when its live value exceeds a single line. The old 1-line auto-shrink
+    // hid overflow by shrinking the font down to 0.4× — that wasn't what
+    // the user asked for ("I want to see all the digits, just spread across
+    // more lines"). Now we cap at a sensible floor (32px ≈ readable on
+    // phone portrait) and let long results wrap naturally.
+    overflowWrap: 'anywhere',
     wordBreak: 'break-all',
     flexShrink: 0,
-    // ponytail (M8): when the live result is sticky (showing the last good
-    // value while the user types an incomplete expression), italicize it so
-    // the user can tell the displayed value isn't fresh. Don't change the
-    // value or opacity — opacity < 1 creates a compositing layer that can
-    // intercept pointer events on the keypad below (e2e regression).
     fontStyle: props.liveSticky ? 'italic' : 'normal',
     // ponytail (TGC-23): errors stay on the small error fontSize (don't run
     // auto-shrink on them — error text is short and the clamp is fine).
     ...(shownError ? { fontSize: 'clamp(22px, 4.5vw, 36px)', fontWeight: 500 } : null),
   };
-
-  // ponytail (TGC-23): dynamic result font shrink. The token clamp gives a
-  // reasonable size for short results, but multi-digit decimals (e.g. long
-  // division, big factorial, or live error labels) can still wrap to 2-3
-  // lines on narrow phones or compact desktop shells. We want a single
-  // line, so on every render we measure the actual line count and shrink
-  // in 0.9× steps until it converges. Single useLayoutEffect per change
-  // so the user never sees a "flash at full size then shrink" pop.
-  // Errors take the smaller errorSize path above and skip this entirely.
-  //
-  // We can't rely on scrollWidth > clientWidth for the overflow check:
-  // overflowWrap:break-word + wordBreak:break-all wrap digits, so
-  // scrollWidth stays bounded by clientWidth even for 15+ digit results.
-  // Instead we count lines (offsetHeight / lineHeight). 1 line = good;
-  // 2+ lines = shrink. The 0.4× floor caps absurd inputs to a single
-  // readable line instead of shrinking toward zero.
-  //
-  // Implementation gotcha: lineHeight must be re-read INSIDE the
-  // measureLines closure. The CSS `line-height: 1.05` is unitless, so
-  // getComputedStyle returns the resolved value in px at the current
-  // font-size. If we capture lineHeight once before the loop, it stays
-  // at the natural-size value (e.g. 105px) while the loop shrinks the
-  // font down to 65px — the next call still divides offsetHeight by
-  // 105 and reports "1 line" when it's actually 2. Re-reading on each
-  // iteration makes the check track the live font size.
-  const resultRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (shownError) return;
-    const el = resultRef.current;
-    if (!el) return;
-    el.style.fontSize = 'var(--display-fs)';
-    const measureLines = (): number => {
-      const fontSize = parseFloat(getComputedStyle(el).fontSize);
-      // CSS lineHeight: 1.05 (unitless) → resolved in px. Fall back to
-      // fontSize * 1.05 if the browser returned a unitless token.
-      const rawLh = parseFloat(getComputedStyle(el).lineHeight);
-      const lh = Number.isFinite(rawLh) && rawLh > 0
-        ? rawLh
-        : fontSize * 1.05;
-      return Math.max(1, Math.round(el.offsetHeight / lh));
-    };
-    let scale = 1;
-    for (let i = 0; i < 10; i++) {
-      el.style.fontSize = `calc(var(--display-fs) * ${scale})`;
-      if (measureLines() <= 1) return;
-      scale *= 0.9;
-    }
-    el.style.fontSize = 'calc(var(--display-fs) * 0.4)';
-  }, [props.result, shownError, props.expression]);
 
   // ponytail: previous layout used `justify-content: flex-end` to push input + result
   // to the bottom of the display column. When the display column got squeezed on
@@ -224,7 +191,7 @@ export function Display(props: Props) {
   // by .shell overflow: hidden on desktop) instead of into the top bar.
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <input
+      <textarea
         ref={ref}
         value={props.expression || '0'}
         onSelect={onSelect}
@@ -237,11 +204,12 @@ export function Display(props: Props) {
         autoCorrect="off"
         spellCheck={false}
         aria-label="Expression"
+        data-testid="expression"
         style={exprStyle}
       />
       <div
-        ref={resultRef}
         style={resultStyle}
+        data-testid="result"
         aria-live="polite"
         data-error-code={shownError && props.errorCode ? props.errorCode : undefined}
         data-error={shownError ? 'true' : undefined}

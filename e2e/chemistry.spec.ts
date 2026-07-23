@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
 test.describe('Chemistry balancer', () => {
   test('switching to Chemistry hides the basic Display + Keypad', async ({ page }) => {
     await expect(page.getByTestId('chem-mode')).toBeVisible();
-    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+    await expect(page.locator('main textarea[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('H2 + O2 -> H2O balances to 2 H2 + O2 -> 2 H2O', async ({ page }) => {

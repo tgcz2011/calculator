@@ -352,7 +352,14 @@ textarea:focus-visible {
   border-radius: var(--radius-lg);
   margin: var(--s-6) auto;
   height: calc(100% - var(--s-12));
-  overflow: hidden;
+  /* ponytail (TGC-27 #1): the old `overflow:hidden` here clipped every
+   * descendant whose box extended past the 9:16 frame, including native
+   * <select> dropdowns (iOS Safari shows them inline at the field rather
+   * than as OS popovers) and the chemistry chip-segment tabs in narrow
+   * viewports. clip-path keeps the rounded shadow while letting children
+   * paint past the frame so popovers stay visible. */
+  overflow: visible;
+  clip-path: inset(0 round var(--radius-lg));
 }
 
 /* ponytail (TGC-25 #8): desktop aspect-ratio lock. ROOT FIX: the old rule
@@ -418,7 +425,10 @@ textarea:focus-visible {
   margin: 0;
   border-radius: 0;
   box-shadow: none;
-  overflow: hidden;
+  /* ponytail (TGC-27 #1): visible overflow under force-landscape too — the
+   * rotated scientific shell shouldn't swallow its own popovers. */
+  overflow: visible;
+  clip-path: inset(0);
   transform-origin: top left;
   transform: rotate(90deg) translateY(-100%);
   z-index: var(--z-modal);
@@ -452,12 +462,12 @@ textarea:focus-visible {
 /* Chip active state - the inverse pill (text becomes page bg, chip becomes
    page text). Visible in both light + dark because both tokens resolve. */
 .ui-chip-segment {
-  display: inline-flex;
+  display: flex;
   background: var(--key-fn-bg);
   border-radius: var(--radius-full);
   padding: 2px;
   gap: 2px;
-  overflow-x: auto;
+  flex-wrap: wrap;
   max-width: 100%;
 }
 
@@ -613,6 +623,13 @@ textarea:focus-visible {
   position: relative;
   z-index: var(--z-tabbar);
   width: 100%;
+  /* ponytail (TGC-27 #1): the previous overflow-x:auto hid horizontal
+   * overflow behind a hidden scrollbar — iOS users had no way to know the
+   * toolbar kept more pills to the right. Combined with the picker chip
+   * container being `overflow:auto` in card shape, chips on phone-portrait
+   * just got silently clipped. flex-wrap + visible overflow guarantees
+   * every pill stays reachable. */
+  overflow: visible;
 }
 
 .app-toolbar--picker {

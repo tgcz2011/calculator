@@ -66,10 +66,16 @@ export function ChipSegment({
           background: 'var(--key-fn-bg)',
           borderRadius: 'var(--radius-md)',
           padding: 4,
-          gap: 2,
-          overflow: layout === 'fill' ? 'hidden' : 'auto',
+          gap: 4,
+          // ponytail (TGC-27 #1): allow chips to wrap onto multiple rows in
+          // narrow viewports (phone-portrait + 9:16 aspect-locked desktop, or
+          // the rotated scientific shell) instead of being clipped on the
+          // right. The old `overflow:hidden`/`overflow:auto` combination hid
+          // categories like "面积/体积" behind an invisible scrollbar.
+          overflow: 'visible',
+          flexWrap: 'wrap',
         }
-      : {}),
+      : { flexWrap: 'wrap' }),
     ...(layout === 'fill' && shape === 'pill' ? { width: '100%' } : {}),
   };
   return (
