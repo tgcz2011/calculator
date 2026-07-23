@@ -25,7 +25,7 @@ async function tap(page: Page, label: string): Promise<void> {
 }
 
 function expressionLocator(page: Page) {
-  return page.locator('input[aria-label="Expression"]');
+  return page.locator('textarea[aria-label="Expression"]');
 }
 
 async function expressionText(page: Page): Promise<string> {
@@ -97,7 +97,7 @@ test.describe('Keyboard extras', () => {
     await page.keyboard.press('Control+3');
     await page.keyboard.press('Control+1');
     // Basic mode renders the expression input (basic/scientific share it).
-    await expect(page.locator('input[aria-label="Expression"]')).toBeVisible();
+    await expect(page.locator('textarea[aria-label="Expression"]')).toBeVisible();
   });
 
   test('ArrowLeft moves cursor back; ArrowRight moves it forward', async ({ page }) => {

@@ -148,20 +148,32 @@ test.describe('TGC-23 rotate button on both mobile and desktop (item 4)', () => 
 });
 
 test.describe('TGC-25 long expression containment', () => {
-  test('long numeric input stays inside the display and scrolls to the cursor', async ({ page }) => {
+  test('long numeric input wraps inside the display and stays cursor-aligned', async ({ page }) => {
+    // ponytail (TGC-27): the Display switched from <input> to <textarea>.
+    // Long numeric input now wraps onto multiple lines (no horizontal scroll)
+    // and the auto-grow effect keeps the cursor on the last line.
     await page.keyboard.type('1234567890123456789012345678901234567890');
-    const metrics = await page.locator('input[aria-label="Expression"]').evaluate((element) => {
-      const input = element as HTMLInputElement;
-      const rect = input.getBoundingClientRect();
-      const parent = input.parentElement!.getBoundingClientRect();
+    const metrics = await page.locator('textarea[aria-label="Expression"]').evaluate((element) => {
+      const ta = element as HTMLTextAreaElement;
+      const rect = ta.getBoundingClientRect();
+      const parent = ta.parentElement!.getBoundingClientRect();
+      const cs = getComputedStyle(ta);
+      const fs = parseFloat(cs.fontSize);
+      const rawLh = parseFloat(cs.lineHeight);
+      const lh = Number.isFinite(rawLh) && rawLh > 0 ? rawLh : fs * 1.4;
       return {
         inside: rect.left >= parent.left && rect.right <= parent.right,
-        scrollable: input.scrollWidth > input.clientWidth,
-        atEnd: input.scrollLeft + input.clientWidth >= input.scrollWidth - 2,
+        // Wrap: scrollHeight exceeds single-line height.
+        wraps: ta.scrollHeight > lh * 1.5,
+        // No horizontal overflow.
+        horizontalOverflow: ta.scrollWidth - ta.clientWidth,
+        // Cursor pinned to the last line (textarea auto-grows + scrolls to end).
+        atEnd: ta.scrollTop + ta.clientHeight >= ta.scrollHeight - 2,
       };
     });
     expect(metrics.inside).toBe(true);
-    expect(metrics.scrollable).toBe(true);
+    expect(metrics.wraps).toBe(true);
+    expect(metrics.horizontalOverflow).toBeLessThanOrEqual(2);
     expect(metrics.atEnd).toBe(true);
   });
 });
@@ -197,51 +209,41 @@ test.describe('TGC-23 dynamic display font (item 5)', () => {
     expect(Math.abs(fs - natural)).toBeLessThan(1);
   });
 
-  test('long result auto-shrinks below the natural size', async ({ page }) => {
-    const natural = await naturalDisplayFs(page);
-    // Build a result that wraps to multiple lines at the natural size on
-    // every viewport we test. 1/7 (17 chars) fits on iPad at 9.5vw, so we
-    // use 20! instead — mathjs returns 2432902008176640000 (19 digits),
-    // which overflows the 358-688px display columns at every clamp value.
+  test('long result wraps onto multiple lines without horizontal overflow', async ({ page }) => {
+    // ponytail (TGC-27): the old behavior was auto-shrink to a single
+    // illegible line. The user asked for the full number visible across
+    // multiple lines. We assert the new behavior: long result wraps, stays
+    // readable, and never horizontally overflows.
     await page.keyboard.type('20!');
     await page.keyboard.press('Enter');
     const fs = await page.locator("[aria-live='polite']").first().evaluate(
       (el) => parseFloat(getComputedStyle(el).fontSize),
     );
-    // Auto-shrink must kick in: resolved size strictly less than natural.
-    // The 0.4× floor is a fallback (only applied if 10 shrink iterations
-    // don't converge), so we don't assert a lower bound on the ratio.
-    expect(fs).toBeLessThan(natural - 0.5);
+    // The natural display size is preserved (no shrink); the result is
+    // allowed to wrap instead of being squashed to 0.4× the size.
+    expect(fs).toBeGreaterThanOrEqual(28);
   });
 
   test('result element never overflows its container', async ({ page }) => {
+    // ponytail (TGC-27): the result wraps onto multiple lines; the assertion
+    // is now "wraps without horizontal overflow" instead of "single line".
     // belt-and-braces: pick a couple of long-result cases and verify the
-    // element's scrollWidth fits inside clientWidth (or wraps via
-    // overflowWrap:break-word into a single line, post auto-shrink). We
-    // use the AC button to clear between cases — Ctrl+A / Delete are
-    // swallowed by the window-level keydown handler in basic mode.
+    // element's scrollWidth fits inside clientWidth. We use the AC button
+    // to clear between cases — Ctrl+A / Delete are swallowed by the
+    // window-level keydown handler in basic mode.
     const cases = ['1/7', '999999999999+1', '1234567890/1'];
     for (const expr of cases) {
       await page.getByRole('button', { name: 'All clear' }).click();
       await page.keyboard.type(expr);
       await page.keyboard.press('Enter');
-      const { scrollWidth, clientWidth, lineHeight, offsetHeight } = await page
+      const { scrollWidth, clientWidth } = await page
         .locator("[aria-live='polite']")
         .first()
         .evaluate((el) => ({
           scrollWidth: el.scrollWidth,
           clientWidth: el.clientWidth,
-          lineHeight: parseFloat(getComputedStyle(el).lineHeight),
-          offsetHeight: el.offsetHeight,
         }));
-      // overflowWrap:break-word wraps, so scrollWidth shouldn't exceed
-      // clientWidth by more than 1 px of sub-pixel rounding. 2 px is safe.
       expect(scrollWidth - clientWidth).toBeLessThanOrEqual(2);
-      // And the auto-shrink should have collapsed the result to a single
-      // line so the user can read it at a glance.
-      const lh = Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : 1;
-      const lines = Math.max(1, Math.round(offsetHeight / lh));
-      expect(lines).toBeLessThanOrEqual(1);
     }
   });
 });

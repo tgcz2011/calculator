@@ -282,20 +282,20 @@ test.describe('Basic mode', () => {
   // ponytail: TGC-20 item 5 — backspace key on the basic keypad.
   test('backspace key removes last character of expression', async ({ page }) => {
     for (const k of ['1', '2', '3']) await tap(page, k);
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('123');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('123');
     await tap(page, '⌫');
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('12');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('12');
     await tap(page, '⌫');
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('1');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('1');
   });
 
   test('backspace on empty expression is a no-op', async ({ page }) => {
     // ponytail: Display shows '0' as the placeholder when expression is empty
     // (so the dark display area isn't visually blank). Backspace on an empty
     // expression must keep that placeholder, not crash or insert anything.
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('0');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('0');
     await tap(page, '⌫');
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('0');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('0');
   });
 
   // ponytail: TGC-20 item 4 — paren buttons on basic keypad.
@@ -479,7 +479,7 @@ test.describe('Date / Time mode', () => {
   test('switching to Date hides Display and Keypad', async ({ page }) => {
     await tap(page, '日期');
     await expect(page.getByTestId('date-mode')).toBeVisible();
-    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+    await expect(page.locator('main textarea[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('diff sub-tab computes days between two dates', async ({ page }) => {
@@ -541,7 +541,7 @@ test.describe('Units + Currency mode', () => {
   test('switching to Units hides Display and Keypad', async ({ page }) => {
     await tap(page, '单位');
     await expect(page.getByTestId('units-mode')).toBeVisible();
-    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+    await expect(page.locator('main textarea[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('length conversion: 5 km = 5000 m', async ({ page }) => {
@@ -605,7 +605,7 @@ test.describe('Programmer mode', () => {
   test('switching to Programmer hides the basic Display + Keypad', async ({ page }) => {
     await tap(page, '程序员');
     await expect(page.getByTestId('programmer-mode')).toBeVisible();
-    await expect(page.locator('main input[aria-label="Expression"]')).toHaveCount(0);
+    await expect(page.locator('main textarea[aria-label="Expression"]')).toHaveCount(0);
   });
 
   test('HEX is the default radix and QWORD is the default word size', async ({ page }) => {

@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-22 · Version: 0.2.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped.
+Last updated: 2026-07-23 · Version: 0.2.0.1 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped + TGC-27 (#1 transform containment: chip-segment + toolbar wrap + shell clip-path instead of overflow:hidden; #2 long-expression wrap: input→textarea, multi-line result, no auto-shrink; #2 follow-up result/keypad containment) shipped.
 
 ---
 
@@ -129,6 +129,11 @@ Last updated: 2026-07-22 · Version: 0.2.0.0 · Status: 9 requested modules ship
 - Chemistry input uses three switchable touch-keyboard pages: digits, the complete Latin alphabet, and parser-supported symbols including grouping, hydrate, charge, reaction, and equilibrium tokens.
 - Calculator components remain mounted while switching modes so each calculator keeps its own temporary input. Basic/scientific reducer drafts and history views are scoped by calculator; legacy unscoped history belongs to Basic.
 
+### 2.14 TGC-27 long-expression wrap + transform containment fixes
+- **#1 菜单/弹层被遮根因**：picker/units/programmer/chem 的 `ChipSegment` 用 `flex-wrap: wrap` + `overflow: visible` 取代 `overflow-x: auto`（隐藏滚动条 + 卡片 `overflow: hidden`），窄视口（phone-portrait + 9:16 锁定壳、旋转 scientific）下分类标签不再被右切。`.app-toolbar` 同上：wrap + visible，所有 pill 直接可见。`.shell[data-desktop='true']` 与 `.shell[data-force-landscape='true']` 把 `overflow: hidden` 换成 `clip-path: inset(0 …)`，保留圆角阴影但允许 `<select>` / 下拉 / native 弹层溢出 containing block。
+- **#2 长输入多行换行根因**：`Display.tsx` 把 expression 从 `<input>` 换成 `<textarea>`（readOnly、自动 `height = scrollHeight` 撑高），`whiteSpace: pre-wrap` + `wordBreak: break-all` + `overflowWrap: anywhere`，70+ 数字直接折行铺满多行，删掉"强制 1 行"的 `useLayoutEffect` 0.4× 自动收缩。result 也改为 `overflow-wrap: anywhere` + `word-break: break-all`，允许数字结果自然换行，不再被压成 0.4× 字号。
+- **#2 follow-up：长结果画到 keypad 上**（Tester 在桌面 aspect-locked basic 抓到的回归）。`#2` 删除 auto-shrink + result 允许多行折行 + `.display-area` 从 `overflow:hidden` 释放（为 #1 弹层留出空间），三者叠加导致：长数字 result 在桌面 9:16 锁定壳里折 3 行 ≈ 315px，而 display 列只有 ~150px，结果文字直接画到 keypad 上（hit-test 还在 keypad 上、视觉污染）。根因修复：`.display-area` 的内部 `<Display>` 包装加 `overflow:hidden`（children 不会画到 keypad），result 改 `flex:1 1 0` + `minHeight:0` + `overflow-y:auto`（超出列内空间就在 result 内部滚动），expression textarea 的 JS auto-grow 在撑高超过 display 列 50% 时也 cap 到 50% 并翻 `overflow-y:auto`（同样内部滚动，绝不向下推）。保留 `.shell` 的 `clip-path`（#1 弹层释放不回归）。
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）
@@ -196,6 +201,10 @@ Last updated: 2026-07-22 · Version: 0.2.0.0 · Status: 9 requested modules ship
 ### 3.15 手动旋转按钮不能挂在死的 Screen Orientation API 上
 - **坑**：§2.11 #6 把 scientific 的**自动**横屏改成了 CSS 旋转，但 `↻` 旋转按钮的 onClick 仍调 `orientation.toggle()` -> `screen.orientation.lock()`。该 API 在 iOS Safari 不存在、在其它移动 web 需 fullscreen（常被拒），所以按钮在 web 上是 no-op--用户点 ↻ 没反应（TGC-26 #4 被报"rotate键不生效"）。e2e 只断言按钮存在 + 文案是"↻ 旋转"，不断言点击效果，所以这个死按钮漏过了 645 passed 的回归。
 - **规约**：web 上任何"旋转/横屏"的用户操作都驱动 CSS `[data-force-landscape]`（`rotated` 状态），不要调 `screen.orientation.lock`。native（Capacitor）才用真 lock。桌面旋转按钮的 gate 用 `dataDesktop`（`isTauri || tier==='desktop'`，与 aspect CSS 同锚、响应式），不要用 `platform.ts` 的静态 `isDesktop`（768px 门槛、加载时算一次，会与响应式 CSS 漂移）。e2e 必须断言点击 ↻ 后 `data-force-landscape`/`data-aspect` 翻转，不能只断言按钮存在。
+
+### 3.16 多行折行的 result/textarea 必须有高度上限，不能让 display 列"自由生长"
+- **坑**：TGC-27 #2 把 `result` 从 1 行 auto-shrink（0.4× 压字）改成允许多行折行（`overflow-wrap:anywhere` + `word-break:break-all`），同时 `expression` 从 `<input>` 换 `<textarea>` + `height = scrollHeight` 自动撑高。两者单独看都 OK，但叠加 + #1 把 `.display-area` / `.shell` 从 `overflow:hidden` 释放（为了让 `<select>` / `<details>` 弹层能溢出 containing block）后，桌面 aspect-locked basic 长算式（如 `1234567*8910111`）的 result 在 100px 字号下折 3 行 ≈ 315px，而 display 列实测只有 152px -> `.display-area` 的 `scrollHeight=369` 而 `clientHeight=152` -> 结果文字**画到 keypad 上**（hit-test 不受影响，因为 keypad 仍在上层，但视觉上"结果叠在 AC、%、÷、× 按键上"）。回归原例：`.display-area` 152 / keypad 起 y≈152。
+- **规约**：在 `<Display>` 内部给 expression textarea 和 result 各自加列内高度上限 + 内部滚动，绝不让它们把高度外溢到 display 列之外。`result` 改 `flex:1 1 0` + `min-height:0` + `overflow-y:auto`（吃 expression 留下的剩余空间，超出就在 result 内滚动）。textarea 在 JS useEffect 里 auto-grow 时 cap 到 display 列的 50%（`column.clientHeight * 0.5`），超过则把 `height` 写死成 cap 并翻 `overflow-y:'auto'`。Display 包装层加 `overflow:hidden`（兜底，children 即使再次引入也会被裁在列内）。**绝不能简单把 display-area 的 `overflow` 改回 `hidden` 解决**——那样 `#1` 的弹层释放会被改回去，picker / units / programmer / chem 的 `<select>` 弹层、`<details>`、chip-segment 又会被壳裁切。e2e 必须断言：长结果时 result 的 `clientHeight ≤ display-area.clientHeight`、keypad 元素 `getBoundingClientRect().top ≥ display-area.getBoundingClientRect().bottom`。
 
 ---
 

@@ -158,7 +158,7 @@ test.describe('Basic mode parens (item 4)', () => {
     await pickBasic(page);
     await page.getByRole('button', { name: 'Open parenthesis' }).click();
     await page.getByRole('button', { name: 'Close parenthesis' }).click();
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('()');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('()');
   });
 
   test('nested parens evaluate correctly', async ({ page }) => {
@@ -193,11 +193,11 @@ test.describe('Basic mode backspace (item 5)', () => {
     for (const k of ['1', '2', '3', '4']) {
       await page.getByRole('button', { name: k, exact: true }).click();
     }
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('1234');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('1234');
     await page.getByRole('button', { name: 'Backspace' }).click();
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('123');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('123');
     await page.getByRole('button', { name: 'Backspace' }).click();
-    await expect(page.locator('input[aria-label="Expression"]').inputValue()).resolves.toBe('12');
+    await expect(page.locator('textarea[aria-label="Expression"]').inputValue()).resolves.toBe('12');
   });
 
   test('backspace after committed error clears the error', async ({ page }) => {
@@ -216,7 +216,7 @@ test.describe('Basic mode backspace (item 5)', () => {
   // see the event; without the guard one press deleted two characters.
   test('keyboard Backspace on focused input deletes exactly one character', async ({ page }) => {
     await pickBasic(page);
-    const input = page.locator('input[aria-label="Expression"]');
+    const input = page.locator('textarea[aria-label="Expression"]');
     // Build "1234" via the keypad so the cursor naturally lands at end (4).
     for (const k of ['1', '2', '3', '4']) {
       await page.getByRole('button', { name: k, exact: true }).click();
@@ -249,7 +249,7 @@ test.describe('Basic mode backspace (item 5)', () => {
   // same expression twice into history). One press, one history entry.
   test('keyboard Enter on focused input records history exactly once', async ({ page }) => {
     await pickBasic(page);
-    const input = page.locator('input[aria-label="Expression"]');
+    const input = page.locator('textarea[aria-label="Expression"]');
     // Operators expose aria-label = "Add" / "Subtract" etc., not the visible
     // symbol. We click the keypad buttons directly with the accessible name.
     await page.getByRole('button', { name: '2', exact: true }).click();
