@@ -11,6 +11,7 @@ import { AdvancedMath } from './components/AdvancedMath';
 import { Loan } from './components/Loan';
 import { Tax } from './components/Tax';
 import { Kin } from './components/Kin';
+import { GeoGebra } from './components/GeoGebra';
 import { CalculatorPicker } from './components/CalculatorPicker';
 import { Pill } from './components/Panel';
 import { useCalculator, type Mode } from './state/useCalculator';
@@ -141,6 +142,24 @@ function isEditableFieldTarget(t: EventTarget | null): boolean {
     return t.getAttribute('aria-label') !== 'Expression';
   }
   return false;
+}
+
+// ponytail (TGC-29 / spec.md §3.17): the GeoGebra Calculator Suite (non-
+// Classic) applet lives inside a host subtree marked with `data-ggb-applet`.
+// The applet owns its own keyboard surface (graphing canvas, algebra input,
+// tool palettes). When the user is interacting with it, the window keydown
+// handler must NOT route keystrokes into the basic calculator's calc.insert()
+// - otherwise pressing digit keys while the GGB canvas has focus would type
+// into the basic expression and corrupt the GGB input. We walk up from the
+// event target looking for the marker; if found, treat the target as an
+// editable field (bail before the routing below). Same-document only -
+// cross-document events (e.g. an iframe-bundled GGB) carry a null target and
+// are caught by the legacy input/textarea check above.
+function eventInsideGraphingApplet(t: EventTarget | null): boolean {
+  if (!(t instanceof Element)) return false;
+  // closest() walks ancestors; works on the host subtree (parent, grand-
+  // parent, ...). Also catches the marker on the target itself.
+  return !!t.closest('[data-ggb-applet="true"]');
 }
 
 export default function App() {
@@ -296,6 +315,11 @@ export default function App() {
       // basic calculator's Expression input is readOnly and excluded by
       // isEditableFieldTarget, so its TGC-20 handling below is preserved.
       if (isEditableFieldTarget(e.target)) return;
+      // ponytail (TGC-29): also bail when the keystroke originated inside the
+      // GeoGebra applet subtree (canvas focus, GGB-hosted inputs). The
+      // applet owns its keyboard surface; we'd otherwise shove digits into
+      // the basic calculator and corrupt the GGB session. See spec.md §3.17.
+      if (eventInsideGraphingApplet(e.target)) return;
       // ponytail (TGC-20 hotfix): when the expression input has focus, Display's
       // own onKeyDown handles Enter / Backspace / Cmd+Z / Escape. Skip our
       // window-level handling for those keys so we don't double-dispatch — the
@@ -380,6 +404,14 @@ export default function App() {
     <div key="loan" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'loan'}><Loan /></div>,
     <div key="tax" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'tax'}><Tax /></div>,
     <div key="kin" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'kin'}><Kin /></div>,
+    // ponytail (TGC-29): graphing pane hosts the GeoGebra Calculator Suite
+    // (non-Classic) loaded from the source-built GWT bundle under /geogebra/.
+    // Self-contained: no engine / history / sync routing, so it just needs
+    // the same `hidden` toggle the other persistent panes use. The loader's
+    // own `data-ggb-applet='true'` attribute lets the window keydown guard
+    // below skip typing-into-Graphing without leaking into the basic
+    // calculator (see spec.md §3.17).
+    <div key="graphing" className="calculator-mode-pane" hidden={showPicker || calc.state.mode !== 'graphing'}><GeoGebra t={t} locale={locale} /></div>,
   ];
 
   if (showPicker) {
@@ -539,7 +571,7 @@ export default function App() {
           <span>{t('common.sync')}</span>
         </Pill>
       </div>
-      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && calc.state.mode !== 'loan' && calc.state.mode !== 'tax' && calc.state.mode !== 'kin' && (
+      {calc.state.mode !== 'history' && calc.state.mode !== 'date' && calc.state.mode !== 'units' && calc.state.mode !== 'programmer' && calc.state.mode !== 'chemistry' && calc.state.mode !== 'advanced' && calc.state.mode !== 'loan' && calc.state.mode !== 'tax' && calc.state.mode !== 'kin' && calc.state.mode !== 'graphing' && (
         <div className="display-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-display)', color: 'var(--text-display)' }}>
           <Display
             expression={calc.state.expression}
@@ -583,7 +615,7 @@ export default function App() {
           onNegate={calc.negate}
         />
       )}
-      {calc.state.mode !== 'history' && tier === 'phone' && (
+      {calc.state.mode !== 'history' && calc.state.mode !== 'graphing' && tier === 'phone' && (
         <div style={{ textAlign: 'center', padding: 'var(--s-1)', color: 'var(--fg-tertiary)', fontSize: 11 }}>
           {t('app.hint.ac')}
         </div>

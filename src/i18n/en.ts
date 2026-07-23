@@ -14,6 +14,7 @@ export const en: Record<string, string> = {
   'mode.loan': 'Loan',
   'mode.tax': 'Tax',
   'mode.kin': 'Kinship',
+  'mode.graphing': 'Graphing',
   
   'mode.angle.deg': 'Degree',
   'mode.angle.rad': 'Radian',
@@ -60,6 +61,8 @@ export const en: Record<string, string> = {
   'picker.tile.tax.desc': 'Comprehensive income + best bonus track',
   'picker.tile.kin.title': 'Kinship',
   'picker.tile.kin.desc': 'Northern / Cantonese variants',
+  'picker.tile.graphing.title': 'Graphing',
+  'picker.tile.graphing.desc': 'Function plotter + geometry (GeoGebra)',
   
   'picker.tile.history.title': 'History',
   'picker.tile.history.desc': 'Review past calculations',
@@ -197,6 +200,17 @@ export const en: Record<string, string> = {
   'kin.result.title': 'Title',
   'kin.result.empty': 'No match for this chain',
   'kin.result.alt': '{n} alternative titles',
+
+  // Graphing mode (TGC-29) — GeoGebra Calculator Suite (non-Classic) loaded
+  // from the source-built GWT bundle. Mirrors zh.ts keys 1:1.
+  'graph.idle': 'Preparing GeoGebra...',
+  'graph.loading': 'Loading GeoGebra Calculator Suite...',
+  'graph.retry': 'Retry',
+  'graph.error.title': 'GeoGebra failed to load',
+  'graph.error.bundleMissing': 'Source-built GWT bundle not found',
+  'graph.error.bundlePath': 'Expected path: {path}',
+  'graph.error.noGGBApplet': 'Bundle loaded but did not expose GGBApplet',
+  'graph.error.injectFailed': 'Applet injection failed',
 
   // Chemistry balancer mode
   'chem.input.label': 'Reaction',

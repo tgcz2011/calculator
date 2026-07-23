@@ -13,6 +13,7 @@ export const zh: Record<string, string> = {
   'mode.loan': '贷款',
   'mode.tax': '个税',
   'mode.kin': '亲戚称呼',
+  'mode.graphing': '图形',
   
   'mode.angle.deg': '角度',
   'mode.angle.rad': '弧度',
@@ -59,6 +60,8 @@ export const zh: Record<string, string> = {
   'picker.tile.tax.desc': '综合所得 + 年终奖最优',
   'picker.tile.kin.title': '亲戚称呼',
   'picker.tile.kin.desc': '南北粤语，输入即查',
+  'picker.tile.graphing.title': '图形',
+  'picker.tile.graphing.desc': '函数绘图与几何（GeoGebra）',
   
   'picker.tile.history.title': '历史',
   'picker.tile.history.desc': '查看之前的算式',
@@ -197,6 +200,19 @@ export const zh: Record<string, string> = {
   'kin.result.title': '称呼',
   'kin.result.empty': '无法识别该关系链',
   'kin.result.alt': '另有 {n} 种可能称谓',
+
+  // Graphing mode (TGC-29) — GeoGebra Calculator Suite (non-Classic) loaded
+  // from the source-built GWT bundle. Keys cover the picker tile, the
+  // loader's state machine (idle / loading / ready / error), and the
+  // missing-bundle diagnostic.
+  'graph.idle': '准备加载 GeoGebra...',
+  'graph.loading': '正在加载 GeoGebra 计算器套件...',
+  'graph.retry': '重试',
+  'graph.error.title': 'GeoGebra 未加载',
+  'graph.error.bundleMissing': '未找到源码构建的 GWT 包',
+  'graph.error.bundlePath': '期望路径：{path}',
+  'graph.error.noGGBApplet': '已加载脚本但未暴露 GGBApplet',
+  'graph.error.injectFailed': 'applet 注入失败',
 
   // Chemistry balancer mode
   'chem.input.label': '反应式',

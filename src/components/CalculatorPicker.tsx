@@ -93,6 +93,19 @@ const TILES: CalculatorTileDef[] = [
     glyph: '\u{1F46B}',
     enabled: true,
   },
+  // ponytail (TGC-29): graphing tile — GeoGebra Calculator Suite (non-Classic)
+  // loaded from the source-built GWT bundle vendored under /geogebra/. The
+  // tile stays enabled even before General(high) produces the bundle: the
+  // GeoGebra component renders an explicit "missing bundle" empty-state with
+  // the expected path so the integration is testable + visible. See
+  // spec.md §2.15 + §3.17.
+  {
+    mode: 'graphing',
+    titleKey: 'picker.tile.graphing.title',
+    descKey: 'picker.tile.graphing.desc',
+    glyph: '\u{1F4CA}',
+    enabled: true,
+  },
   // ponytail: History is intentionally NOT a picker tile — it's a view of
   // past calculations, not a calculator itself. Picking it as the entry
   // point would land the user on an empty-state screen with no history.

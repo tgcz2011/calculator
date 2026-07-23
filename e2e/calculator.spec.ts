@@ -37,6 +37,7 @@ const ZH_TO_MODE: Record<string, string> = {
   '贷款': 'loan',
   '个税': 'tax',
   '亲戚称呼': 'kin',
+  '图形': 'graphing',
 };
 
 async function pickMode(page: Page, mode: string): Promise<void> {

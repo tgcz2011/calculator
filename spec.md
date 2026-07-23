@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-23 · Version: 0.2.0.1 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped + TGC-27 (#1 transform containment: chip-segment + toolbar wrap + shell clip-path instead of overflow:hidden; #2 long-expression wrap: input→textarea, multi-line result, no auto-shrink; #2 follow-up result/keypad containment) shipped.
+Last updated: 2026-07-23 · Version: 0.3.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped + TGC-27 (#1 transform containment: chip-segment + toolbar wrap + shell clip-path instead of overflow:hidden; #2 long-expression wrap: input→textarea, multi-line result, no auto-shrink; #2 follow-up result/keypad containment) shipped + TGC-29 (GeoGebra Calculator Suite integration surface: Mode union + picker tile + GeoGebra.tsx loader via Tier B `GGBApplet` pattern, i18n, spec.md, no-CSP-change same-origin vendor, e2e; bundle vendor + GWT build still owed to General(high) — see §2.15) shipped.
 
 ---
 
@@ -30,7 +30,7 @@ Last updated: 2026-07-23 · Version: 0.2.0.1 · Status: 9 requested modules ship
 | P3 | 解题步骤 / 笔记本风格 / 图形 | 不做（差异化交给 Desmos；首版明确不做图形/分步） |
 
 ### Module inventory (picker tiles)
-`basic` · `scientific` · `programmer` · `units`(+实时汇率) · `date` · `chemistry` · `advanced` · `loan` · `tax` · `kin` = 10 tiles. History is NOT a picker tile (it's a view, reachable via TabBar inside any calculator).
+`basic` · `scientific` · `programmer` · `units`(+实时汇率) · `date` · `chemistry` · `advanced` · `loan` · `tax` · `kin` · `graphing`(GeoGebra Suite) = 11 tiles. History is NOT a picker tile (it's a view, reachable via TabBar inside any calculator).
 
 ---
 
@@ -134,6 +134,30 @@ Last updated: 2026-07-23 · Version: 0.2.0.1 · Status: 9 requested modules ship
 - **#2 长输入多行换行根因**：`Display.tsx` 把 expression 从 `<input>` 换成 `<textarea>`（readOnly、自动 `height = scrollHeight` 撑高），`whiteSpace: pre-wrap` + `wordBreak: break-all` + `overflowWrap: anywhere`，70+ 数字直接折行铺满多行，删掉"强制 1 行"的 `useLayoutEffect` 0.4× 自动收缩。result 也改为 `overflow-wrap: anywhere` + `word-break: break-all`，允许数字结果自然换行，不再被压成 0.4× 字号。
 - **#2 follow-up：长结果画到 keypad 上**（Tester 在桌面 aspect-locked basic 抓到的回归）。`#2` 删除 auto-shrink + result 允许多行折行 + `.display-area` 从 `overflow:hidden` 释放（为 #1 弹层留出空间），三者叠加导致：长数字 result 在桌面 9:16 锁定壳里折 3 行 ≈ 315px，而 display 列只有 ~150px，结果文字直接画到 keypad 上（hit-test 还在 keypad 上、视觉污染）。根因修复：`.display-area` 的内部 `<Display>` 包装加 `overflow:hidden`（children 不会画到 keypad），result 改 `flex:1 1 0` + `minHeight:0` + `overflow-y:auto`（超出列内空间就在 result 内部滚动），expression textarea 的 JS auto-grow 在撑高超过 display 列 50% 时也 cap 到 50% 并翻 `overflow-y:auto`（同样内部滚动，绝不向下推）。保留 `.shell` 的 `clip-path`（#1 弹层释放不回归）。
 
+### 2.15 TGC-29 GeoGebra Calculator Suite (graphing mode)
+- **来源**：将 GeoGebra Calculator Suite（非 Classic）从 `https://github.com/geogebra/geogebra` **源码** 构建出来的 GWT JS bundle vendor 进 calculator，`calculator/public/geogebra/`，前端动态加载 `window.GGBApplet` 注入到容器。**不**使用 https://www.geogebra.org/calculator iframe 托管服务（这正是 issue 标题里"不要使用web"的禁止语义）。
+- **集成面**（`src/components/GeoGebra.tsx` + App.tsx wiring）：
+  - Mode union 扩 `'graphing'`（`useCalculator.ts:5`）；不路由 engine / history / sync。
+  - Picker 新 tile `{ mode: 'graphing', glyph: '📊', enabled: true }`，与既有 tile 同形；missing-bundle 时仍可点开，由组件自己显示 `data-state='error'` 占位。
+  - 持久化 pane 加 `<div key="graphing" hidden={…mode !== 'graphing'}><GeoGebra t locale /></div>`，与既有 8 个 pane 并列 mounted-hidden，避免切走再回来丢 applet 状态。
+  - Display-area 渲染条件加入 `mode !== 'graphing'` 排除（GeoGebra 自带 UI，不叠 Display/Keypad）。
+  - 底部 `app.hint.ac` hint 也对 graphing 关闭（提示是"点 AC 清除"，graphing 没有 keypad）。
+- **加载器契约**：
+  - 注入 `<script src="/geogebra/deployggb.js" data-geogebra-bootstrap="true">`；`deployggb.js` 是 GWT 标准的 bootstrap loader，源仓库 `source/web/web/build.gradle.kts:208` 在 gwtCompile 后写出。
+  - Idempotent：`<script>` 标签以 `data-geogebra-bootstrap="true"` 选查，第二次 mount 复用；`window.__geogebraBootLoaded` 标记二次加载完成。
+  - 装载成功后 `new window.GGBApplet({ appName: 'suite', width, height, showToolBar: true, … }, '5.0').inject(container)`；`appName='suite'` 对应 source 里的 `id = "suite"` / `title = "Calculator Suite"`（app-specs-convention.gradle.kts:95-105），不是 `classic`、不是 `graphing`、不是 `cas`。`'5.0'` 是 GeoGebra 的 articleVersion，序列化格式号。
+  - Unmount 调 `applet.removeFromDOM()`；不删 `<script>`，避免重选 tile 重新下载 multi-MB permutation。
+- **状态机**（`data-state` 反映在容器 div 上，供 e2e 断言）：
+  - `idle` — 容器已挂载、未启动加载。
+  - `loading` — bootstrap 在飞、GWT permutation 加载中。
+  - `ready` — applet 注入成功。
+  - `error` — bundle 缺失 / 脚本加载失败 / `GGBApplet` 未暴露 / `inject` 抛错。错误分支提供重试按钮 (`data-testid="geogebra-retry"`) + 期望路径文案，明确告知把 bundle 放到 `public/geogebra/`。
+- **键盘路由守卫**（`App.tsx:handleKey`）：`eventInsideGraphingApplet(e.target)` 通过 `e.target.closest('[data-ggb-applet="true"]')` 查祖先。如果命中则早退（return），避免 GWT 内部 textarea/canvas 上的按键被全局 handler `preventDefault` 后塞进 `calc.insert()`，污染基本计算器（也破坏 GGB 内部输入）。详见 §3.17。
+- **CSP**：bundle 在同一 origin `/geogebra/`，沿用既有 `'self'`，**不**需要给 geogebra.org 加白名单；这跟 §4 "平台 web PWA + Capacitor + Tauri 一份 bundle" 一致。GWT 旧版 permutation 用 `eval()` —— Vite 输出 `script-src 'self' 'unsafe-inline'` 已经允许 self-hosted 内联 eval；如未来切到 Tauri strict CSP 且 GWT 报 eval-blocked，给 `<iframe sandbox="allow-scripts allow-same-origin">` 套一层（iframe 自带 CSP，父页 CSP 不动）。当前 CSP **无需变更**。
+- **i18n**：keys `mode.graphing` / `picker.tile.graphing.{title,desc}` / `graph.{idle,loading,retry}` / `graph.error.{title,bundleMissing,bundlePath,noGGBApplet,injectFailed}`；zh 权威 + en 1:1 镜像。
+- **测试**：thin smoke —— picker tile 可见、路由进 graphing、容器 `data-state` 反映加载状态、`error` 时占位文案展示预期路径。重功能测留给 General(high) 在 GWT 端。
+- **License**：GeoGebra 整体 EUPL 1.2 + 非商业限制；GWT bundle 自带 JLaTeXMath (GPL+字体混合)；project owner 在分发/上架前需要 GeoGebra 授权确认（业务/法务决策，不阻塞构建本身，留 TGC-29 issue 备注）。
+
 ---
 
 ## 3. Improvement & Pitfall Specs（重点 - 避免重犯）
@@ -205,6 +229,10 @@ Last updated: 2026-07-23 · Version: 0.2.0.1 · Status: 9 requested modules ship
 ### 3.16 多行折行的 result/textarea 必须有高度上限，不能让 display 列"自由生长"
 - **坑**：TGC-27 #2 把 `result` 从 1 行 auto-shrink（0.4× 压字）改成允许多行折行（`overflow-wrap:anywhere` + `word-break:break-all`），同时 `expression` 从 `<input>` 换 `<textarea>` + `height = scrollHeight` 自动撑高。两者单独看都 OK，但叠加 + #1 把 `.display-area` / `.shell` 从 `overflow:hidden` 释放（为了让 `<select>` / `<details>` 弹层能溢出 containing block）后，桌面 aspect-locked basic 长算式（如 `1234567*8910111`）的 result 在 100px 字号下折 3 行 ≈ 315px，而 display 列实测只有 152px -> `.display-area` 的 `scrollHeight=369` 而 `clientHeight=152` -> 结果文字**画到 keypad 上**（hit-test 不受影响，因为 keypad 仍在上层，但视觉上"结果叠在 AC、%、÷、× 按键上"）。回归原例：`.display-area` 152 / keypad 起 y≈152。
 - **规约**：在 `<Display>` 内部给 expression textarea 和 result 各自加列内高度上限 + 内部滚动，绝不让它们把高度外溢到 display 列之外。`result` 改 `flex:1 1 0` + `min-height:0` + `overflow-y:auto`（吃 expression 留下的剩余空间，超出就在 result 内滚动）。textarea 在 JS useEffect 里 auto-grow 时 cap 到 display 列的 50%（`column.clientHeight * 0.5`），超过则把 `height` 写死成 cap 并翻 `overflow-y:'auto'`。Display 包装层加 `overflow:hidden`（兜底，children 即使再次引入也会被裁在列内）。**绝不能简单把 display-area 的 `overflow` 改回 `hidden` 解决**——那样 `#1` 的弹层释放会被改回去，picker / units / programmer / chem 的 `<select>` 弹层、`<details>`、chip-segment 又会被壳裁切。e2e 必须断言：长结果时 result 的 `clientHeight ≤ display-area.clientHeight`、keypad 元素 `getBoundingClientRect().top ≥ display-area.getBoundingClientRect().bottom`。
+
+### 3.17 GeoGebra applet 的全局 keydown 劫持必须被显式拦截
+- **坑**：`App.tsx` 的 `handleKey` 在 `mode !== 'basic'/'scientific'` 之外的模式仍然跑（只是 Display/Keypad 不渲染），并且默认会 `preventDefault()` + `calc.insert()` 所有可打印按键。GeoGebra Calculator Suite（GWT 编译出来的 applet）有自己一套键盘面：algebra input 是个 `<textarea>`、graphing canvas 监听方向键/+/= 等。`isEditableFieldTarget(e.target)` 拦截了 textarea 路径（因为 GGB 那个 textarea 的 `aria-label !== 'Expression'`），但 **canvas 焦点** 不满足那个检查——`e.target` 是 `<canvas>`、不是 INPUT/TEXTAREA，所以 `preventDefault` 跑掉、把方向键、+/-、数字塞进基础计算器，污染基本算式也破坏 GGB 内部平移/缩放。TGC-20 hotfix 只覆盖"文本输入框"这一种焦点形态，GGB canvas 不在内。
+- **规约**：把 GeoGebra applet 容器（以及它的整个子树）用 `data-ggb-applet='true'` 标记，`App.tsx:handleKey` 在 `isEditableFieldTarget` 之后追加一个 `eventInsideGraphingApplet(e.target)` 守卫（`e.target.closest('[data-ggb-applet="true"]')`）。命中则早退。`<GeoGebra>` 在挂载容器 + applet host 两层都标这个属性（容器占位 + host 子树），未来即便 GWT 把元素挂到更深一级也兜得住。e2e 必须断言：在 GeoGebra canvas / host 获得焦点后按数字键，basic 计算器的 expression 不会变（用 `page.keyboard.press('1')` 后读 expression 仍是空）。**不要**靠 `stopPropagation` / `stopImmediatePropagation`（GWT 自己也用这两个，并且它需要继续冒泡到自己的 listeners），用我们自己的 `closest` 判断早退最稳。
 
 ---
 

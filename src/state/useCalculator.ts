@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { engine, type AngleMode } from '../engine';
 import { history } from '../history/api';
 
-export type Mode = 'basic' | 'scientific' | 'history' | 'programmer' | 'units' | 'date' | 'chemistry' | 'advanced' | 'loan' | 'tax' | 'kin';
+// ponytail (TGC-29): added 'graphing' — Calculator Suite (non-Classic) loaded
+// from the source-built GWT bundle under /geogebra/. Self-contained mode (no
+// engine / history routing), so the union extension is purely additive — the
+// active-calculator / drafts map types just get one more key, no reducer
+// change.
+export type Mode = 'basic' | 'scientific' | 'history' | 'programmer' | 'units' | 'date' | 'chemistry' | 'advanced' | 'loan' | 'tax' | 'kin' | 'graphing';
 
 // ponytail: codes that mean "expression isn't finished yet" rather than
 // "expression is wrong". These are deferred — Display won't surface them
