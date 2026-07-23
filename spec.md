@@ -2,7 +2,7 @@
 
 **This file is the single source of truth for every feature / requirement / improvement spec in this project. Read it before starting any work, and record every new spec here.** Purpose: stop the same problem being solved (or hit) twice, and stop wasted effort. (Mandatory rule in `AGENTS.md`.)
 
-Last updated: 2026-07-23 · Version: 0.3.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped + TGC-27 (#1 transform containment: chip-segment + toolbar wrap + shell clip-path instead of overflow:hidden; #2 long-expression wrap: input→textarea, multi-line result, no auto-shrink; #2 follow-up result/keypad containment) shipped + TGC-29 (GeoGebra Calculator Suite integration surface: Mode union + picker tile + GeoGebra.tsx loader via Tier B `GGBApplet` pattern, i18n, spec.md, no-CSP-change same-origin vendor, e2e; bundle vendor + GWT build still owed to General(high) — see §2.15) shipped.
+Last updated: 2026-07-23 · Version: 0.3.0.0 · Status: 9 requested modules shipped + TGC-23 UI polish shipped + TGC-25 (#1–9: force-landscape/aspect/landscape root fixes + scrollable toolbar, history entry, scroll-safe expression, tax & chem touch keypads) shipped + TGC-26 (#4 rotate button root fix: ↻ drives CSS rotated state on web, dataDesktop gate on desktop; #1/2/3/5 calculator isolation + input polish: per-calculator drafts/history, multi-page chem keyboard, wrapped toolbar, adjacent display) shipped + TGC-27 (#1 transform containment: chip-segment + toolbar wrap + shell clip-path instead of overflow:hidden; #2 long-expression wrap: input→textarea, multi-line result, no auto-shrink; #2 follow-up result/keypad containment) shipped + TGC-29 (GeoGebra Calculator Suite shipped end-to-end: bundle vendor `public/geogebra/{deployggb.js,web3d/,css/}` from General(high)'s `:web:SuperWeb` GWT compile; loader wires `setHTML5Codebase('/geogebra/web3d/', true)` + Tier B `GGBApplet` pattern; spec §2.15 + §3.17 + module inventory 10→11; e2e green across all 4 device projects; workbox globIgnores excludes `**/geogebra/**` from precache so 50+MB GWT bundle stays out of the SW manifest) shipped.
 
 ---
 
@@ -145,17 +145,20 @@ Last updated: 2026-07-23 · Version: 0.3.0.0 · Status: 9 requested modules ship
 - **加载器契约**：
   - 注入 `<script src="/geogebra/deployggb.js" data-geogebra-bootstrap="true">`；`deployggb.js` 是 GWT 标准的 bootstrap loader，源仓库 `source/web/web/build.gradle.kts:208` 在 gwtCompile 后写出。
   - Idempotent：`<script>` 标签以 `data-geogebra-bootstrap="true"` 选查，第二次 mount 复用；`window.__geogebraBootLoaded` 标记二次加载完成。
-  - 装载成功后 `new window.GGBApplet({ appName: 'suite', width, height, showToolBar: true, … }, '5.0').inject(container)`；`appName='suite'` 对应 source 里的 `id = "suite"` / `title = "Calculator Suite"`（app-specs-convention.gradle.kts:95-105），不是 `classic`、不是 `graphing`、不是 `cas`。`'5.0'` 是 GeoGebra 的 articleVersion，序列化格式号。
+  - 装载成功后 `new window.GGBApplet({ appName: 'suite', width, height, showToolBar: true, … }, '5.0')`；`appName='suite'` 对应 source 里的 `id = "suite"` / `title = "Calculator Suite"`（app-specs-convention.gradle.kts:95-105），不是 `classic`、不是 `graphing`、不是 `cas`。`'5.0'` 是 GeoGebra 的 articleVersion，序列化格式号。
+  - **Codebase 覆盖**：注入前**必须**调 `applet.setHTML5Codebase('/geogebra/web3d/', true)`。`deployggb.js` 的 auto-detect 默认 code-base 是 `"./"`（相对当前页面 = `/`），未覆盖会去找 `/web3d/...` 404。第二个参数 `offline=true` 告诉 loader "本地资源，404 就报硬错，别静默跳 geogebra.org"。
+  - **Permutation 路径是 `web3d/`，不是 `suite/`**：源仓里 GWT 模块是 `org.geogebra.web.SuperWeb`（不是 `suite`），gradle `web/build.gradle.kts:54` 把它加进 `gwt.modules`，编译产物落到 `war/web3d/`（含 `web3d.nocache.js`、deferredjs、fonts、js 语言包等）。`appName='suite'` 只决定哪个视图集（AV/SV/PV...），**不**决定 permutation 目录名。Calculator Suite 之外的 app（graphing / cas / 3d）也走 `web3d/`。
+  - 注入容器用 HTMLElement 直接传（`applet.inject(container)`），deployggb.js 的 vararg `inject(id_or_element, type?, noPreview?)` 都接受；这里 element 引用更稳定。
   - Unmount 调 `applet.removeFromDOM()`；不删 `<script>`，避免重选 tile 重新下载 multi-MB permutation。
 - **状态机**（`data-state` 反映在容器 div 上，供 e2e 断言）：
   - `idle` — 容器已挂载、未启动加载。
   - `loading` — bootstrap 在飞、GWT permutation 加载中。
   - `ready` — applet 注入成功。
-  - `error` — bundle 缺失 / 脚本加载失败 / `GGBApplet` 未暴露 / `inject` 抛错。错误分支提供重试按钮 (`data-testid="geogebra-retry"`) + 期望路径文案，明确告知把 bundle 放到 `public/geogebra/`。
+  - `error` — bundle 缺失 / 脚本加载失败 / `GGBApplet` 未暴露 / `inject` 抛错。错误分支提供重试按钮 (`data-testid="geogebra-retry"`) + 期望路径文案 `/geogebra/web3d/`，明确告知把 bundle 放到 `public/geogebra/`。
 - **键盘路由守卫**（`App.tsx:handleKey`）：`eventInsideGraphingApplet(e.target)` 通过 `e.target.closest('[data-ggb-applet="true"]')` 查祖先。如果命中则早退（return），避免 GWT 内部 textarea/canvas 上的按键被全局 handler `preventDefault` 后塞进 `calc.insert()`，污染基本计算器（也破坏 GGB 内部输入）。详见 §3.17。
 - **CSP**：bundle 在同一 origin `/geogebra/`，沿用既有 `'self'`，**不**需要给 geogebra.org 加白名单；这跟 §4 "平台 web PWA + Capacitor + Tauri 一份 bundle" 一致。GWT 旧版 permutation 用 `eval()` —— Vite 输出 `script-src 'self' 'unsafe-inline'` 已经允许 self-hosted 内联 eval；如未来切到 Tauri strict CSP 且 GWT 报 eval-blocked，给 `<iframe sandbox="allow-scripts allow-same-origin">` 套一层（iframe 自带 CSP，父页 CSP 不动）。当前 CSP **无需变更**。
-- **i18n**：keys `mode.graphing` / `picker.tile.graphing.{title,desc}` / `graph.{idle,loading,retry}` / `graph.error.{title,bundleMissing,bundlePath,noGGBApplet,injectFailed}`；zh 权威 + en 1:1 镜像。
-- **测试**：thin smoke —— picker tile 可见、路由进 graphing、容器 `data-state` 反映加载状态、`error` 时占位文案展示预期路径。重功能测留给 General(high) 在 GWT 端。
+- **i18n**：keys `mode.graphing` / `picker.tile.graphing.{title,desc}` / `graph.{idle,loading,retry}` / `graph.error.{title,bundleMissing,bundlePath,noGGBApplet,injectFailed}`；zh 权威 + en 1:1 镜像。`graph.error.bundlePath` 用 `{path}` 插值，调用方传入 `/geogebra/web3d/`（即真正有内容的 permutation 目录）。
+- **测试**：thin smoke —— picker tile 可见、路由进 graphing、容器 `data-state` 反映加载状态、`error` 时占位文案展示预期路径。重功能测留给 General(high) 在 GWT 端。gated test 在 `/geogebra/deployggb.js` 和 `/geogebra/web3d/web3d.nocache.js` 都 200 时自动激活，跑 happy-path (`data-state='ready'`) + retry。
 - **License**：GeoGebra 整体 EUPL 1.2 + 非商业限制；GWT bundle 自带 JLaTeXMath (GPL+字体混合)；project owner 在分发/上架前需要 GeoGebra 授权确认（业务/法务决策，不阻塞构建本身，留 TGC-29 issue 备注）。
 
 ---

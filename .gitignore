@@ -26,3 +26,16 @@ npm-debug.log*
 playwright-report
 test-results
 .playwright
+
+# ponytail (TGC-29): the GeoGebra GWT bundle vendored under public/geogebra/
+# is generated, not authored — it's a build artifact produced by
+# `./gradlew :web:gwtCompile` from github.com/geogebra/geogebra. It's
+# 50+ MB of compiled JavaScript, fonts, and language packs; committing it
+# would bloat history and slow clones. The bundle is owned by General(high)
+# on a sibling branch (agent/general-high/c00e61fe) — release.sh /
+# deployment scripts pull it from there (or it gets vendored by an
+# explicit `git checkout origin/agent/general-high/<sha> -- public/geogebra/`
+# in the release pipeline; see TGC-29 issue comments for the contract).
+# The directory is preserved as untracked so a fresh clone that wants to
+# run the Graphing tile locally can grab the bundle separately.
+public/geogebra/

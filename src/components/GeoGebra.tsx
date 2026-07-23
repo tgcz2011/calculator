@@ -2,30 +2,39 @@
 // source-built GWT bundle vendored under /geogebra/. The issue explicitly
 // forbids "用 web" (i.e. iframe https://www.geogebra.org hosting service)
 // but is OK with "用源码" — this component consumes the GWT-compiled JS
-// produced by `:web:suite` in geogebra/source/web. The vendored bundle ships
-// in public/geogebra/ (deployggb.js bootstrap + suite/<perm>/... permutation
-// files + the static assets GWT emits at compile time).
+// produced by `:web:gwtCompile -Pgmodule=org.geogebra.web.SuperWeb` in
+// geogebra/source/web. The vendored bundle ships in public/geogebra/
+// (deployggb.js bootstrap + web3d/<perm>/... permutation files + the
+// static assets GWT emits at compile time).
+//
+// Permutation dir is `web3d/` — NOT `suite/`. The GWT module name is
+// `org.geogebra.web.SuperWeb` (gradle `web/build.gradle.kts:54`); the
+// appName='suite' parameter only chooses the view set inside the loaded
+// applet (AV/SV/PV toggle), it does not change where the permutation
+// files live. Suite / graphing / cas / 3d all share `web3d/`.
 //
 // Build path (provided by General(high) per the audit):
-//   ./gradlew :web:suite  (or equivalent gwtCompile target)
-//   cp -r source/web/web/war/deployggb.js        calculator/public/geogebra/
-//   cp -r source/web/web/war/suite/              calculator/public/geogebra/suite/
-//   cp -r source/web/web/war/css/                calculator/public/geogebra/css/   (if needed by bundle)
+//   ./gradlew :web:gwtCompile -Pgmodule=org.geogebra.web.SuperWeb -Pgdraft
+//   cp -r source/web/web/war/deployggb.js  calculator/public/geogebra/
+//   cp -r source/web/web/war/web3d/        calculator/public/geogebra/web3d/
+//   cp -r source/web/web/war/css/          calculator/public/geogebra/css/
 // Until that lands, the component surfaces a clear empty-state explaining the
 // expected path so this integration can be e2e-tested without the real bundle.
 //
 // Integration model: Tier B from the original audit. The GWT bundle exposes
 // `window.GGBApplet` (the official loader class) — we instantiate it with
 // Calculator Suite parameters (`appName: 'suite'`, GeoGebra's "5.0" article
-// version) and `.inject()` it into a ref'd <div>. This is the pattern
-// geogebra.org's own embed snippet uses; it is not an iframe to the hosted
-// service, so it satisfies the "用源码 / 不要 web" constraint.
+// version), call `setHTML5Codebase('/geogebra/web3d/', true)` to point at
+// the local permutation, and `.inject()` it into a ref'd <div>. This is
+// the pattern geogebra.org's own embed snippet uses; it is not an iframe
+// to the hosted service, so it satisfies the "用源码 / 不要 web" constraint.
 //
 // Lifecycle:
 //  - First mount: inject <script src="/geogebra/deployggb.js"> exactly once
 //    (idempotent guard so multiple mounts / strict-mode double-invoke don't
 //    double-load). deployggb.js exposes `GGBApplet` on window.
-//  - After load, construct the applet and call `.inject(container)`.
+//  - After load, construct the applet, call setHTML5Codebase(...) (BEFORE
+//    inject — the loader caches the path on the instance), then .inject().
 //  - On unmount, call `.removeFromDOM()` to free listeners.
 //  - On any failure (HTTP 404 for the bundle, JS error, missing GGBApplet),
 //    surface a localized error so the user / e2e sees the state clearly.
@@ -51,7 +60,20 @@ import type { CSSProperties } from 'react';
 // showToolBar, etc.) and we don't want to mirror the full schema in TS — the
 // runtime contract is the GWT Java side.
 interface GGBAppletInstance {
+  /** Inject the applet into a host element. The bundle's actual API accepts
+   *  either an HTMLElement or a string id; we pass the HTMLElement directly
+   *  because we hold a stable ref to the host <div>. */
   inject(el: HTMLElement): Promise<void> | void;
+  /** Override the HTML5 codebase before inject(). Critical for self-hosted
+   *  bundles: the loader's auto-detection defaults to `"./"` which resolves
+   *  to the app root, but the GWT permutation lives at `/geogebra/web3d/`
+   *  in our layout. Without this, the applet tries to load
+   *  `./web3d/web3d.nocache.js` and 404s. The `offline` flag flips the loader
+   *  out of "fall back to geogebra.org" mode — set true since the bundle is
+   *  fully local. MUST be called BEFORE inject(); the loader caches the path
+   *  on the applet instance and inject() picks it up. */
+  setHTML5Codebase(codebase: string, offline: boolean): void;
+  /** Tear down the applet + free GWT event listeners. */
   removeFromDOM(): void;
   // Allow-list of common callbacks we don't call yet but want in the type for
   // future hooks (e.g. sync the GGB selection back to the basic calculator).
@@ -154,6 +176,18 @@ export function GeoGebra({ locale, t, appName = 'suite' }: GeoGebraProps) {
         },
         '5.0',
       );
+      // ponytail (TGC-29 / General(high) handoff): the GWT bundle compiled
+      // by General(high) lives at /geogebra/web3d/ (permutation dir is
+      // named after the GWT module `org.geogebra.web.SuperWeb`, NOT the
+      // appName 'suite'). The deployggb.js auto-detect defaults to `"./"`
+      // (relative to the host page = `/`), so without this override the
+      // applet would try to load `./web3d/web3d.nocache.js` and 404. The
+      // `offline=true` flag tells the loader to NOT fall back to
+      // geogebra.org when the local fetch fails — the bundle is fully
+      // self-hosted, so a missing permutation is a hard error, not a
+      // silent network redirect. MUST be called before inject(); the
+      // loader caches the path on the instance and inject() reads it.
+      applet.setHTML5Codebase('/geogebra/web3d/', true);
       const result = applet.inject(container);
       if (result && typeof (result as Promise<void>).then === 'function') {
         (result as Promise<void>).catch((e: unknown) => {
@@ -277,13 +311,19 @@ export function GeoGebra({ locale, t, appName = 'suite' }: GeoGebraProps) {
     setRetryNonce((n) => n + 1);
   }, []);
 
-  // ponytail: render only an empty-state when the bundle is missing/error.
-  // The actual applet container is always mounted (so e2e can assert on its
-  // presence), but it's only given size when state==='ready' so the
-  // placeholder / error copy fills the space cleanly.
+  // ponytail: the applet host div MUST always be in the DOM, not gated on
+  // state==='ready'. The loader's inject() reads containerRef.current to
+  // pass it into GGBApplet — if the ref'd node only mounts when state
+  // transitions to 'ready', the very first injection bails (ref is null)
+  // and we're stuck in idle/loading forever. We layer the placeholder on
+  // top of the host when state !== 'ready' so the visual stays a clean
+  // empty-state while the underlying div is always present. The host is
+  // absolute-positioned so it doesn't push the placeholder around when
+  // sized.
   const containerStyle: CSSProperties = {
     flex: 1,
     minHeight: 0,
+    position: 'relative',
     display: 'flex',
     flexDirection: 'column',
     width: '100%',
@@ -293,13 +333,14 @@ export function GeoGebra({ locale, t, appName = 'suite' }: GeoGebraProps) {
     overflow: 'hidden',
   };
   const appletHostStyle: CSSProperties = {
-    flex: 1,
-    minHeight: 0,
+    position: 'absolute',
+    inset: 0,
     width: '100%',
     height: '100%',
   };
   const placeholderStyle: CSSProperties = {
-    flex: 1,
+    position: state === 'ready' ? 'absolute' : 'relative',
+    inset: state === 'ready' ? 0 : undefined,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -308,6 +349,9 @@ export function GeoGebra({ locale, t, appName = 'suite' }: GeoGebraProps) {
     gap: 'var(--s-3)',
     textAlign: 'center',
     color: 'var(--text-secondary)',
+    pointerEvents: state === 'ready' ? 'none' : 'auto',
+    background: state === 'ready' ? 'transparent' : 'var(--bg-elevated)',
+    zIndex: state === 'ready' ? 1 : 0,
   };
 
   return (
@@ -327,64 +371,62 @@ export function GeoGebra({ locale, t, appName = 'suite' }: GeoGebraProps) {
       // `data-ggb-applet='true'` lets the parent extend the bail if a future
       // refactor relaxes the heuristic. See spec.md §3.17.
     >
-      {state === 'ready' ? (
-        <div
-          ref={containerRef}
-          data-testid={APPLET_TEST_ID}
-          data-ggb-applet="true"
-          style={appletHostStyle}
-        />
-      ) : (
-        <div style={placeholderStyle} data-testid="geogebra-status">
-          {state === 'loading' && (
-            <>
-              <span style={{ fontSize: 36, lineHeight: 1 }} aria-hidden>
-                {'\u{1F4CA}'}
+      <div
+        ref={containerRef}
+        data-testid={APPLET_TEST_ID}
+        data-ggb-applet="true"
+        style={appletHostStyle}
+      />
+      <div style={placeholderStyle} data-testid="geogebra-status">
+        {state === 'loading' && (
+          <>
+            <span style={{ fontSize: 36, lineHeight: 1 }} aria-hidden>
+              {'\u{1F4CA}'}
+            </span>
+            <span>{t('graph.loading')}</span>
+          </>
+        )}
+        {state === 'error' && err && (
+          <>
+            <span style={{ fontSize: 36, lineHeight: 1 }} aria-hidden>
+              {'\u26A0'}
+            </span>
+            <strong>{t('graph.error.title')}</strong>
+            <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
+              {err.message}
+            </span>
+            {err.code === 'BUNDLE_MISSING' && (
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+                {t('graph.error.bundlePath', { path: '/geogebra/web3d/' })}
               </span>
-              <span>{t('graph.loading')}</span>
-            </>
-          )}
-          {state === 'error' && err && (
-            <>
-              <span style={{ fontSize: 36, lineHeight: 1 }} aria-hidden>
-                {'\u26A0'}
-              </span>
-              <strong>{t('graph.error.title')}</strong>
-              <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>
-                {err.message}
-              </span>
-              {err.code === 'BUNDLE_MISSING' && (
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                  {t('graph.error.bundlePath', { path: '/geogebra/deployggb.js' })}
-                </span>
-              )}
-              <button
-                type="button"
-                data-testid={RETRY_TEST_ID}
-                onClick={onRetry}
-                style={{
-                  marginTop: 'var(--s-2)',
-                  padding: 'var(--s-2) var(--s-4)',
-                  borderRadius: 'var(--radius-full)',
-                  background: 'var(--accent)',
-                  color: 'var(--text-on-accent)',
-                  fontWeight: 600,
-                }}
-              >
-                {t('graph.retry')}
-              </button>
-            </>
-          )}
-          {state === 'idle' && (
-            <>
-              <span style={{ fontSize: 36, lineHeight: 1 }} aria-hidden>
-                {'\u{1F4CA}'}
-              </span>
-              <span>{t('graph.idle')}</span>
-            </>
-          )}
-        </div>
-      )}
+            )}
+            <button
+              type="button"
+              data-testid={RETRY_TEST_ID}
+              onClick={onRetry}
+              style={{
+                marginTop: 'var(--s-2)',
+                padding: 'var(--s-2) var(--s-4)',
+                borderRadius: 'var(--radius-full)',
+                background: 'var(--accent)',
+                color: 'var(--text-on-accent)',
+                fontWeight: 600,
+                pointerEvents: 'auto',
+              }}
+            >
+              {t('graph.retry')}
+            </button>
+          </>
+        )}
+        {state === 'idle' && (
+          <>
+            <span style={{ fontSize: 36, lineHeight: 1 }} aria-hidden>
+              {'\u{1F4CA}'}
+            </span>
+            <span>{t('graph.idle')}</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
