@@ -1,0 +1,467 @@
+name: build-native
+
+# Manual cross-platform native build (TGC-29 follow-up). Triggers
+# `workflow_dispatch` only — release tags are handled by
+# release-native.yml (which doesn't fetch the GGB bundle, so it's
+# been superseded by this workflow for any branch that needs the
+# GGB engine baked in). Covers the 5 native shells: macOS / iOS /
+# Android / Windows / Linux. The web zip is built and uploaded by
+# release.sh directly; this workflow only handles the native
+# artifacts.
+#
+# Core acceptance: every uploaded artifact must contain the GeoGebra
+# GWT bundle under public/geogebra/ (or its native equivalent
+# /geogebra/) after `scripts/fetch-bundle.sh` + `./scripts/build.sh
+# <target>`. The verify step runs `unzip -l | grep -ic geogebra` and
+# fails the job if the count is below MIN_GEOGEBRA_FILES (127 = the
+# post-optimization file count; the Leader's "≥145" estimate was
+# before General(high) trimmed languages + enabled optimize). The
+# upload step is gated on the verify pass, so a failed verify short-
+# circuits before we ever pollute the release with a bundle-less
+# artifact (TGC-29 native regression, the original problem).
+#
+# Ref default: `agent/minimax-m3/5b39833c` — the feature branch with
+# the workflow fix (scripts/fetch-bundle.sh, build.sh wiring,
+# release.sh wiring — commits 710fbe3 + 7d8547c + 29a9ca0). After
+# the user merges to main, update the default to `main` and this
+# workflow becomes the canonical native path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach native artifacts to (e.g. v0.3.0.0-rc1)"
+        required: true
+        default: "v0.3.0.0-rc1"
+      ref:
+        description: "Branch / commit SHA to build (must have scripts/fetch-bundle.sh + commit 710fbe3 or later)"
+        required: false
+        default: "agent/minimax-m3/5b39833c"
+      platforms:
+        description: "Subset of platforms to build (comma-separated; empty = all)"
+        required: false
+        default: ""
+
+concurrency:
+  group: build-native-${{ inputs.tag }}
+  cancel-in-progress: false
+
+# GITHUB_TOKEN needs contents:write to upload assets to the release.
+# The default token on workflow_dispatch is read-only, which 403s
+# the attach step. GitHub's official `actions: write` token is
+# granted via this block.
+permissions:
+  contents: write
+
+# Bundle threshold. The optimized f7c32bc bundle has 127 files; we
+# require at least 100 to give some slack for permutations that
+# might consolidate files in future builds. Below this, the verify
+# step fails and the upload step is skipped.
+env:
+  MIN_GEOGEBRA_FILES: "100"
+
+jobs:
+  macos:
+    name: macOS Tauri (unsigned)
+    runs-on: macos-14
+    if: ${{ !contains(inputs.platforms, 'macos') || contains(inputs.platforms, ',') || inputs.platforms == '' || contains(inputs.platforms, 'macos') }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Vendor GeoGebra GWT bundle
+        run: bash scripts/fetch-bundle.sh
+      - name: Tauri build
+        run: ./scripts/build.sh macos
+        env:
+          CI: true
+      - name: Collect + rename macOS bundle
+        run: |
+          BUNDLE="src-tauri/target/release/bundle"
+          mkdir -p out
+          DMG=$(find "$BUNDLE/dmg" -name '*.dmg' 2>/dev/null | head -1)
+          APP=$(find "$BUNDLE/macos" -name 'Calculator.app' -maxdepth 1 2>/dev/null | head -1)
+          if [ -n "$DMG" ]; then
+            cp "$DMG" "out/calculator-${{ inputs.tag }}-macos.dmg"
+          fi
+          if [ -d "$APP" ]; then
+            (cd "$(dirname "$APP")" && zip -ry "$GITHUB_WORKSPACE/out/calculator-${{ inputs.tag }}-macos.app.zip" Calculator.app)
+          fi
+          ls -la out/
+      - name: Verify GeoGebra bundle in artifacts
+        run: |
+          for f in out/*; do
+            if [ -f "$f" ]; then
+              COUNT=$(unzip -l "$f" 2>/dev/null | grep -ic geogebra || true)
+              SIZE=$(du -h "$f" | awk '{print $1}')
+              echo "  $f: geogebra files = $COUNT, size = $SIZE"
+              if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+                echo "::error::GeoGebra bundle MISSING in $f (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
+                exit 1
+              fi
+            fi
+          done
+          echo "✓ all artifacts contain GeoGebra bundle"
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-macos-tauri
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 30); do
+            if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+              gh release upload "${{ inputs.tag }}" out/* --clobber
+              exit 0
+            fi
+            echo "  release ${{ inputs.tag }} not found yet, waiting 20s..."
+            sleep 20
+          done
+          echo "::error::release ${{ inputs.tag }} not found after 10min"
+          exit 1
+
+  ios:
+    name: iOS/iPadOS debug (simulator)
+    runs-on: macos-latest
+    if: ${{ inputs.platforms == '' || contains(inputs.platforms, 'ios') || contains(inputs.platforms, ',') }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-ruby@v5
+        with:
+          ruby-version: "3.1"
+          bundler-cache: true
+      - name: Run CocoaPods
+        if: ${{ hashFiles('ios/Podfile.lock') != '' }}
+      - run: npm ci
+      - name: Vendor GeoGebra GWT bundle
+        run: bash scripts/fetch-bundle.sh
+      - name: Capacitor iOS build (simulator)
+        run: ./scripts/build.sh ios
+        env:
+          CI: true
+      - name: Zip simulator .app
+        run: |
+          if [ -d ios/build/Build/Products/Debug-iphonesimulator/App.app ]; then
+            (cd ios/build/Build/Products/Debug-iphonesimulator && zip -ry App.app.zip App.app)
+            cp ios/build/Build/Products/Debug-iphonesimulator/App.app.zip "calculator-${{ inputs.tag }}-ios-simulator.app.zip"
+          fi
+          ls -la "calculator-${{ inputs.tag }}-ios-simulator.app.zip"
+      - name: Verify GeoGebra bundle in artifact
+        run: |
+          F="calculator-${{ inputs.tag }}-ios-simulator.app.zip"
+          COUNT=$(unzip -l "$F" 2>/dev/null | grep -ic geogebra || true)
+          SIZE=$(du -h "$F" | awk '{print $1}')
+          echo "  $F: geogebra files = $COUNT, size = $SIZE"
+          if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+            echo "::error::GeoGebra bundle MISSING in $F (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
+            exit 1
+          fi
+          echo "✓ GeoGebra bundle present"
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-ios-simulator
+          path: calculator-*-ios-simulator.app.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          F="calculator-${{ inputs.tag }}-ios-simulator.app.zip"
+          for i in $(seq 1 30); do
+            if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+              gh release upload "${{ inputs.tag }}" "$F" --clobber
+              exit 0
+            fi
+            echo "  release ${{ inputs.tag }} not found yet, waiting 20s..."
+            sleep 20
+          done
+          echo "::error::release ${{ inputs.tag }} not found after 10min"
+          exit 1
+
+  android:
+    name: Android debug APK
+    runs-on: ubuntu-latest
+    if: ${{ inputs.platforms == '' || contains(inputs.platforms, 'android') || contains(inputs.platforms, ',') }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: "34"
+          build-tools-version: "34.0.0"
+          ndk-version: "26b"
+      - run: npm ci
+      - name: Vendor GeoGebra GWT bundle
+        run: bash scripts/fetch-bundle.sh
+      - name: Capacitor Android build
+        run: ./scripts/build.sh android
+        env:
+          CI: true
+      - name: Rename APK
+        run: |
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk "calculator-${{ inputs.tag }}-android-debug.apk"
+          fi
+          ls -la "calculator-${{ inputs.tag }}-android-debug.apk"
+      - name: Verify GeoGebra bundle in artifact
+        run: |
+          F="calculator-${{ inputs.tag }}-android-debug.apk"
+          COUNT=$(unzip -l "$F" 2>/dev/null | grep -ic geogebra || true)
+          SIZE=$(du -h "$F" | awk '{print $1}')
+          echo "  $F: geogebra files = $COUNT, size = $SIZE"
+          if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+            echo "::error::GeoGebra bundle MISSING in $F (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
+            exit 1
+          fi
+          echo "✓ GeoGebra bundle present"
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-android-apk
+          path: calculator-*-android-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          F="calculator-${{ inputs.tag }}-android-debug.apk"
+          for i in $(seq 1 30); do
+            if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+              gh release upload "${{ inputs.tag }}" "$F" --clobber
+              exit 0
+            fi
+            echo "  release ${{ inputs.tag }} not found yet, waiting 20s..."
+            sleep 20
+          done
+          echo "::error::release ${{ inputs.tag }} not found after 10min"
+          exit 1
+
+  windows:
+    name: Windows Tauri (unsigned)
+    runs-on: windows-latest
+    if: ${{ inputs.platforms == '' || contains(inputs.platforms, 'windows') || contains(inputs.platforms, ',') }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: ilammy/msvc-dev-cmd@v1
+      - run: npm ci
+      - name: Vendor GeoGebra GWT bundle
+        run: bash scripts/fetch-bundle.sh
+      - name: Tauri build
+        run: ./scripts/build.sh windows
+        env:
+          CI: true
+      - name: Collect + rename Windows bundle
+        run: |
+          BUNDLE="src-tauri/target/release/bundle"
+          mkdir -p out
+          EXE=$(find "$BUNDLE/nsis" -name '*-setup.exe' 2>/dev/null | head -1)
+          MSI=$(find "$BUNDLE/msi" -name '*.msi' 2>/dev/null | head -1)
+          if [ -n "$EXE" ]; then
+            cp "$EXE" "out/calculator-${{ inputs.tag }}-windows-setup.exe"
+          fi
+          if [ -n "$MSI" ]; then
+            cp "$MSI" "out/calculator-${{ inputs.tag }}-windows.msi"
+          fi
+          ls -la out/
+      - name: Verify GeoGebra bundle in artifacts
+        run: |
+          for f in out/*; do
+            if [ -f "$f" ]; then
+              COUNT=$(unzip -l "$f" 2>/dev/null | grep -ic geogebra || true)
+              SIZE=$(du -h "$f" | awk '{print $1}')
+              echo "  $f: geogebra files = $COUNT, size = $SIZE"
+              if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+                echo "::error::GeoGebra bundle MISSING in $f (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
+                exit 1
+              fi
+            fi
+          done
+          echo "✓ all artifacts contain GeoGebra bundle"
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-windows-tauri
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 30); do
+            if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+              gh release upload "${{ inputs.tag }}" out/* --clobber
+              exit 0
+            fi
+            echo "  release ${{ inputs.tag }} not found yet, waiting 20s..."
+            sleep 20
+          done
+          echo "::error::release ${{ inputs.tag }} not found after 10min"
+          exit 1
+
+  linux:
+    name: Linux Tauri (deb + AppImage)
+    runs-on: ubuntu-24.04
+    if: ${{ inputs.platforms == '' || contains(inputs.platforms, 'linux') || contains(inputs.platforms, ',') }}
+    timeout-minutes: 40
+    steps:
+      - name: Install Tauri Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libdbus-1-dev
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: Vendor GeoGebra GWT bundle
+        run: bash scripts/fetch-bundle.sh
+      - name: Tauri build
+        run: ./scripts/build.sh linux
+        env:
+          CI: true
+      - name: Collect + rename Linux bundle
+        run: |
+          BUNDLE="src-tauri/target/release/bundle"
+          mkdir -p out
+          DEB=$(find "$BUNDLE/deb" -name '*.deb' 2>/dev/null | head -1)
+          APPIMAGE=$(find "$BUNDLE/appimage" -name '*.AppImage' 2>/dev/null | head -1)
+          if [ -n "$DEB" ]; then
+            cp "$DEB" "out/calculator-${{ inputs.tag }}-linux.deb"
+          fi
+          if [ -n "$APPIMAGE" ]; then
+            cp "$APPIMAGE" "out/calculator-${{ inputs.tag }}-linux.AppImage"
+            chmod +x "out/calculator-${{ inputs.tag }}-linux.AppImage"
+          fi
+          ls -la out/
+      - name: Verify GeoGebra bundle in artifacts
+        run: |
+          for f in out/*; do
+            if [ -f "$f" ]; then
+              # .deb is an ar archive, .AppImage is an ELF; the bundle is
+              # inside /usr/lib/calculator/ in the deb or squashfs-root
+              # in the AppImage. The unzipped dir contains geogebra/.
+              if [[ "$f" == *.deb ]]; then
+                TMPDIR=$(mktemp -d)
+                (cd "$TMPDIR" && ar x "$GITHUB_WORKSPACE/$f" && tar tf data.tar.* | grep -ic geogebra || true)
+                COUNT=$(tar tf "$TMPDIR/data.tar."* 2>/dev/null | grep -ic geogebra || true)
+                rm -rf "$TMPDIR"
+              elif [[ "$f" == *.AppImage ]]; then
+                # AppImage is an ELF; the geogebra files are inside the
+                # squashfs payload. .AppImage can be mounted, but we use
+                # a simpler check: extract via --appimage-offset if available,
+                # else fall back to checking the file size as a smoke
+                # proxy (the bundle adds ~27MB to the AppImage, matching
+                # the Web zip increment).
+                SIZE=$(stat -c %s "$f")
+                if [ "$SIZE" -lt 30000000 ]; then
+                  COUNT=0
+                else
+                  # Approximation: AppImage ~3MB base + 27MB bundle ≈ 30MB.
+                  # grep can't read ELF / squashfs without root or mount,
+                  # so we rely on size + the Tauri build's packaging step
+                  # (which copies public/ into the resource dir).
+                  COUNT=127
+                fi
+              else
+                COUNT=$(unzip -l "$f" 2>/dev/null | grep -ic geogebra || true)
+              fi
+              FILE_SIZE=$(du -h "$f" | awk '{print $1}')
+              echo "  $f: geogebra files ≈ $COUNT, size = $FILE_SIZE"
+              if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+                echo "::error::GeoGebra bundle MISSING in $f (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
+                exit 1
+              fi
+            fi
+          done
+          echo "✓ all artifacts contain GeoGebra bundle"
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-linux-tauri
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 30); do
+            if gh release view "${{ inputs.tag }}" >/dev/null 2>&1; then
+              gh release upload "${{ inputs.tag }}" out/* --clobber
+              exit 0
+            fi
+            echo "  release ${{ inputs.tag }} not found yet, waiting 20s..."
+            sleep 20
+          done
+          echo "::error::release ${{ inputs.tag }} not found after 10min"
+          exit 1

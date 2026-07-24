@@ -41,7 +41,24 @@ case "$TARGET" in
     echo ">> building Capacitor iOS/iPadOS"
     npm run build
     [ -d ios ] || npm run cap:add:ios
-    npm run cap:ios
+    # ponytail: `cap open ios` opens the Xcode IDE — fine on a dev
+    # machine, broken in CI (no display, exits non-zero). When CI is
+    # set, run the simulator build directly with xcodebuild so the
+    # script stays usable from the workflow's runner.
+    if [ -n "${CI:-}" ]; then
+      npm run cap:sync
+      xcodebuild \
+        -workspace ios/App/App.xcworkspace \
+        -scheme App \
+        -configuration Debug \
+        -sdk iphonesimulator \
+        -destination 'generic/platform=iOS Simulator' \
+        -derivedDataPath ios/build \
+        ONLY_ACTIVE_ARCH=NO \
+        build
+    else
+      npm run cap:ios
+    fi
     [ -f .geogebra-bundle.sha ] && cp .geogebra-bundle.sha dist/BUNDLE_SHA.txt
     echo ">> open Xcode; select target; Run on iPhone/iPad simulator"
     ;;
@@ -49,7 +66,14 @@ case "$TARGET" in
     echo ">> building Capacitor Android"
     npm run build
     [ -d android ] || npm run cap:add:android
-    npm run cap:android
+    # ponytail: same split as ios — `cap open android` opens Android
+    # Studio interactively; in CI we run gradle directly.
+    if [ -n "${CI:-}" ]; then
+      npm run cap:sync
+      (cd android && ./gradlew assembleDebug --no-daemon)
+    else
+      npm run cap:android
+    fi
     [ -f .geogebra-bundle.sha ] && cp .geogebra-bundle.sha dist/BUNDLE_SHA.txt
     echo ">> open Android Studio; Run on emulator"
     ;;
