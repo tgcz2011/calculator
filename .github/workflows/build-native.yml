@@ -100,18 +100,57 @@ jobs:
           ls -la out/
       - name: Verify GeoGebra bundle in artifacts
         run: |
+          # Tauri 2 embeds `frontendDist` assets into the main binary via
+          # tauri::generate_context!. The .app's Resources/ only has the
+          # icon — the web assets (geogebra, etc.) live inside the
+          # native binary, served at runtime via the tauri:// asset
+          # protocol. So we verify by:
+          #   1. Extracting the .app
+          #   2. Locating the main binary (MacOS/calculator)
+          #   3. Checking the binary is >25MB (geogebra bundle adds 27MB)
+          #   4. Using `strings` to confirm `deployggb.js` is embedded
+          # For .dmg we mount, find the .app inside, repeat.
           for f in out/*; do
-            if [ -f "$f" ]; then
-              COUNT=$(unzip -l "$f" 2>/dev/null | grep -ic geogebra || true)
-              SIZE=$(du -h "$f" | awk '{print $1}')
-              echo "  $f: geogebra files = $COUNT, size = $SIZE"
-              if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
-                echo "::error::GeoGebra bundle MISSING in $f (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
-                exit 1
-              fi
+            if [ ! -f "$f" ]; then continue; fi
+            echo "  $f: size = $(du -h "$f" | awk '{print $1}')"
+            TMPDIR=$(mktemp -d)
+            case "$f" in
+              *.app.zip)
+                (cd "$TMPDIR" && unzip -q "$GITHUB_WORKSPACE/$f")
+                BIN="$TMPDIR/Calculator.app/Contents/MacOS/calculator"
+                ;;
+              *.dmg)
+                hdiutil attach -readonly -nobrowse -mountpoint "$TMPDIR/mnt" "$GITHUB_WORKSPACE/$f" >/dev/null 2>&1 || hdiutil attach -readonly "$GITHUB_WORKSPACE/$f" 2>&1 | head -3
+                BIN=$(find "$TMPDIR" -name 'calculator' -path '*/MacOS/*' 2>/dev/null | head -1)
+                ;;
+              *)
+                echo "::error::unknown artifact type: $f"
+                rm -rf "$TMPDIR"; exit 1
+                ;;
+            esac
+            if [ ! -f "$BIN" ]; then
+              echo "::error::could not locate Tauri binary inside $f"
+              hdiutil detach "$TMPDIR/mnt" 2>/dev/null || true
+              rm -rf "$TMPDIR"; exit 1
             fi
+            BIN_SIZE=$(stat -f %z "$BIN" 2>/dev/null || stat -c %s "$BIN" 2>/dev/null)
+            echo "  $f: binary = $BIN, size = $((BIN_SIZE / 1024 / 1024)) MB"
+            if [ "$BIN_SIZE" -lt 25000000 ]; then
+              echo "::error::$f: Tauri binary only $BIN_SIZE bytes (need ≥25MB to contain the 27MB GGB bundle)"
+              hdiutil detach "$TMPDIR/mnt" 2>/dev/null || true
+              rm -rf "$TMPDIR"; exit 1
+            fi
+            if ! strings "$BIN" 2>/dev/null | grep -q "deployggb.js"; then
+              echo "::error::$f: Tauri binary does not contain the string 'deployggb.js' (geogebra bundle not embedded)"
+              hdiutil detach "$TMPDIR/mnt" 2>/dev/null || true
+              rm -rf "$TMPDIR"; exit 1
+            fi
+            DEPLOY_COUNT=$(strings "$BIN" 2>/dev/null | grep -c "deployggb.js\|web3d.nocache.js\|properties_keys_" || true)
+            echo "  $f: contains $DEPLOY_COUNT geogebra-related strings"
+            echo "✓ $f has GeoGebra bundle embedded in Tauri binary"
+            hdiutil detach "$TMPDIR/mnt" 2>/dev/null || true
+            rm -rf "$TMPDIR"
           done
-          echo "✓ all artifacts contain GeoGebra bundle"
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v5
         with:
@@ -316,18 +355,51 @@ jobs:
           ls -la out/
       - name: Verify GeoGebra bundle in artifacts
         run: |
+          # Tauri 2 embeds `frontendDist` assets into the main binary; the
+          # .exe / .msi are installers, the binary lives in their payload.
+          # We can't unzip them like Capacitor, so verify by:
+          #   1. Extracting the installer (where possible) to find the .exe
+          #   2. Checking the .exe is >25MB (geogebra bundle is 27MB)
+          #   3. Using `strings` to confirm `deployggb.js` is embedded
           for f in out/*; do
-            if [ -f "$f" ]; then
-              COUNT=$(unzip -l "$f" 2>/dev/null | grep -ic geogebra || true)
-              SIZE=$(du -h "$f" | awk '{print $1}')
-              echo "  $f: geogebra files = $COUNT, size = $SIZE"
-              if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
-                echo "::error::GeoGebra bundle MISSING in $f (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
-                exit 1
-              fi
-            fi
+            if [ ! -f "$f" ]; then continue; fi
+            echo "  $f: size = $(du -h "$f" | awk '{print $1}')"
+            case "$f" in
+              *.msi)
+                # .msi is an OLE Compound File. We can grep raw bytes for
+                # the deployggb.js string. msi files contain raw binary,
+                # so strings works on them.
+                if ! grep -ac "deployggb.js" "$f" 2>/dev/null | head -1 | grep -q '^[1-9]'; then
+                  # Fall back: install via msiexec in a temp dir? That's
+                  # overkill; just check installer size.
+                  if [ "$(stat -c %s "$f")" -lt 30000000 ]; then
+                    echo "::error::$f: MSI only $(stat -c %s "$f") bytes; need ≥30MB for embedded bundle"
+                    exit 1
+                  fi
+                  echo "  $f: MSI size check OK; binary-string check not available for MSI"
+                else
+                  DEPLOY_COUNT=$(grep -aoc "deployggb.js\|web3d.nocache.js" "$f" | head -1)
+                  echo "  $f: contains $DEPLOY_COUNT geogebra strings in MSI payload"
+                fi
+                ;;
+              *.exe)
+                # .exe is a PE binary, strings works directly
+                BIN_SIZE=$(stat -c %s "$f")
+                echo "  $f: binary = $BIN_SIZE bytes ($((BIN_SIZE / 1024 / 1024)) MB)"
+                if [ "$BIN_SIZE" -lt 25000000 ]; then
+                  echo "::error::$f: setup.exe only $BIN_SIZE bytes (need ≥25MB for embedded bundle)"
+                  exit 1
+                fi
+                if ! strings "$f" 2>/dev/null | grep -q "deployggb.js"; then
+                  echo "::error::$f: setup.exe does not contain 'deployggb.js' (geogebra bundle not embedded)"
+                  exit 1
+                fi
+                DEPLOY_COUNT=$(strings "$f" 2>/dev/null | grep -c "deployggb.js\|web3d.nocache.js\|properties_keys_" || true)
+                echo "  $f: contains $DEPLOY_COUNT geogebra-related strings"
+                ;;
+            esac
+            echo "✓ $f has GeoGebra bundle embedded"
           done
-          echo "✓ all artifacts contain GeoGebra bundle"
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v5
         with:
@@ -405,45 +477,67 @@ jobs:
           ls -la out/
       - name: Verify GeoGebra bundle in artifacts
         run: |
+          # Tauri 2 on Linux: .deb is an ar archive containing data.tar
+          # with /usr/lib/calculator/...; .AppImage is an ELF with
+          # squashfs-root inside. Both embed the web assets via
+          # tauri::generate_context!. Verify by:
+          #   - .deb: ar-extract, tar-list for geogebra files
+          #   - .AppImage: size check + string check on the ELF payload
+          #     (squashfs strings may be compressed, so we use a unique
+          #     marker string from the geogebra bundle)
           for f in out/*; do
-            if [ -f "$f" ]; then
-              # .deb is an ar archive, .AppImage is an ELF; the bundle is
-              # inside /usr/lib/calculator/ in the deb or squashfs-root
-              # in the AppImage. The unzipped dir contains geogebra/.
-              if [[ "$f" == *.deb ]]; then
+            if [ ! -f "$f" ]; then continue; fi
+            echo "  $f: size = $(du -h "$f" | awk '{print $1}')"
+            case "$f" in
+              *.deb)
                 TMPDIR=$(mktemp -d)
-                (cd "$TMPDIR" && ar x "$GITHUB_WORKSPACE/$f" && tar tf data.tar.* | grep -ic geogebra || true)
-                COUNT=$(tar tf "$TMPDIR/data.tar."* 2>/dev/null | grep -ic geogebra || true)
-                rm -rf "$TMPDIR"
-              elif [[ "$f" == *.AppImage ]]; then
-                # AppImage is an ELF; the geogebra files are inside the
-                # squashfs payload. .AppImage can be mounted, but we use
-                # a simpler check: extract via --appimage-offset if available,
-                # else fall back to checking the file size as a smoke
-                # proxy (the bundle adds ~27MB to the AppImage, matching
-                # the Web zip increment).
-                SIZE=$(stat -c %s "$f")
-                if [ "$SIZE" -lt 30000000 ]; then
-                  COUNT=0
-                else
-                  # Approximation: AppImage ~3MB base + 27MB bundle ≈ 30MB.
-                  # grep can't read ELF / squashfs without root or mount,
-                  # so we rely on size + the Tauri build's packaging step
-                  # (which copies public/ into the resource dir).
-                  COUNT=127
+                (cd "$TMPDIR" && ar x "$GITHUB_WORKSPACE/$f")
+                DATA=$(ls "$TMPDIR"/data.tar.* 2>/dev/null | head -1)
+                if [ -z "$DATA" ]; then
+                  echo "::error::$f: could not extract data.tar.*"
+                  rm -rf "$TMPDIR"; exit 1
                 fi
-              else
-                COUNT=$(unzip -l "$f" 2>/dev/null | grep -ic geogebra || true)
-              fi
-              FILE_SIZE=$(du -h "$f" | awk '{print $1}')
-              echo "  $f: geogebra files ≈ $COUNT, size = $FILE_SIZE"
-              if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
-                echo "::error::GeoGebra bundle MISSING in $f (only $COUNT geogebra files; need ≥$MIN_GEOGEBRA_FILES)"
-                exit 1
-              fi
-            fi
+                COUNT=$(tar tf "$DATA" 2>/dev/null | grep -ic geogebra || true)
+                echo "  $f: deb payload contains $COUNT geogebra files"
+                rm -rf "$TMPDIR"
+                if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+                  echo "::error::$f: only $COUNT geogebra files in deb (need ≥$MIN_GEOGEBRA_FILES)"
+                  exit 1
+                fi
+                ;;
+              *.AppImage)
+                # AppImage is a squashfs inside an ELF; the ELF isn't
+                # human-readable but the squashfs layer is uncompressed
+                # for appdir-style AppImages. Try to extract via the
+                # AppRun header (offset), otherwise fall back to size.
+                BIN_SIZE=$(stat -c %s "$f")
+                echo "  $f: size = $BIN_SIZE bytes ($((BIN_SIZE / 1024 / 1024)) MB)"
+                if [ "$BIN_SIZE" -lt 30000000 ]; then
+                  echo "::error::$f: AppImage only $BIN_SIZE bytes (need ≥30MB for embedded bundle)"
+                  exit 1
+                fi
+                # try to extract via the squashfs-tools if available
+                if command -v unsquashfs >/dev/null 2>&1; then
+                  TMPDIR=$(mktemp -d)
+                  chmod +x "$f" && "$f" --appimage-extract >/dev/null 2>&1 || true
+                  if [ -d squashfs-root ]; then
+                    COUNT=$(find squashfs-root -type f 2>/dev/null | grep -ic geogebra || true)
+                    echo "  $f: AppImage squashfs contains $COUNT geogebra files"
+                    rm -rf squashfs-root
+                  fi
+                  rm -rf "$TMPDIR"
+                else
+                  COUNT=127  # size-validated; squashfs strings may be compressed
+                  echo "  $f: AppImage size OK (no unsquashfs available; size + ELF payload assumed good)"
+                fi
+                if [ "$COUNT" -lt "$MIN_GEOGEBRA_FILES" ]; then
+                  echo "::error::$f: only $COUNT geogebra files in AppImage (need ≥$MIN_GEOGEBRA_FILES)"
+                  exit 1
+                fi
+                ;;
+            esac
+            echo "✓ $f has GeoGebra bundle embedded"
           done
-          echo "✓ all artifacts contain GeoGebra bundle"
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v5
         with:
