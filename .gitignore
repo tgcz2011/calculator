@@ -39,3 +39,9 @@ test-results
 # The directory is preserved as untracked so a fresh clone that wants to
 # run the Graphing tile locally can grab the bundle separately.
 public/geogebra/
+
+# ponytail (TGC-29): scripts/fetch-bundle.sh writes the bundle SHA +
+# file count + size to a stamp file at the repo root so build.sh can
+# copy it into dist/BUNDLE_SHA.txt after vite build wipes dist/. The
+# stamp is regenerated every build, never committed.
+.geogebra-bundle.sha

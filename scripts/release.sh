@@ -37,8 +37,20 @@ if git ls-remote --tags origin "${TAG}" 2>/dev/null | grep -q "refs/tags/${TAG}"
   exit 1
 fi
 
+# ponytail (TGC-29): fetch the GeoGebra GWT bundle into public/geogebra/
+# BEFORE building so vite copies it into dist/ (which then flows into
+# the release zip). Same script build.sh calls for native targets —
+# single source of truth. Refuses to clobber local files if origin
+# is unreachable; see scripts/fetch-bundle.sh for the contract.
+bash scripts/fetch-bundle.sh
+
 echo ">> building web PWA (dist/) — version ${VERSION}"
 npm run build
+
+# ponytail (TGC-29): vite wipes dist/ at the start of `npm run build`;
+# re-stamp the bundle SHA from .geogebra-bundle.sha so the released
+# zip self-documents which bundle commit shipped.
+[ -f .geogebra-bundle.sha ] && cp .geogebra-bundle.sha dist/BUNDLE_SHA.txt && echo ">> bundle stamp -> dist/BUNDLE_SHA.txt"
 
 echo ">> zipping dist/ -> ${ARTIFACT}"
 (cd dist && zip -qr "../${ARTIFACT}" .)
@@ -55,6 +67,7 @@ gh release create "${TAG}" \
 
 - 4-segment version scheme (MAJOR.MINOR.HOTFIX.PATCH); see RELEASING.md.
 - Built artifact: ${ARTIFACT} — unzip and open dist/index.html in any modern browser, or sideload via the per-platform builds when available.
+- $(cat dist/BUNDLE_SHA.txt 2>/dev/null || echo '(no bundle stamp — see issue comments)')
 
 See commit log since the previous tag for the full diff." \
   "./${ARTIFACT}"
