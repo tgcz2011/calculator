@@ -130,6 +130,57 @@ test.describe('TGC-29 graphing — gated on vendored bundle', () => {
     await expect(page.getByTestId('geogebra-status')).not.toContainText('加载');
   });
 
+  test('ready state when locale is non-zh/non-en (fallback path)', async ({ page }) => {
+    // ponytail (TGC-29 / General(high) bundle optimization): the trimmed
+    // bundle keeps `properties_keys_en*` and `properties_keys_zh*` only;
+    // every other locale gets a 404 from GGB and silently falls back to
+    // en. The loader passes `language: locale || 'en'` into GGBApplet — so
+    // an `fr` user sees GGB with French chrome if available, otherwise
+    // English. Either path must reach `data-state='ready'`; the contract
+    // is "GGB never errors on a missing language file, it just falls
+    // back". Exercise the path the production 4 e2e projects can't
+    // (their device locales are zh-default via clearAndSeedLocale, and
+    // all Playwright `devices.*` use US-locale UA — neither hits the
+    // missing-language code path).
+    await page.goto('/');
+    await page.evaluate(() => {
+      // ponytail: clear out zh pref and leave lang-pref as undefined; the
+      // app's detectLocale() then reads `navigator.language` and falls
+      // back to 'zh' if it starts with 'zh', else 'en'. We want the GGB
+      // locale to be a known-trimmed value ('fr') rather than whatevernavigator
+      // says. Simpler approach: poke the lang-pref to 'fr' AND override
+      // navigator.language so detectLocale picks fr. (detectLocale only
+      // falls back to navigator when storage is empty.)
+      localStorage.clear();
+      localStorage.setItem('lang-pref', 'fr');
+      try {
+        // navigator.language is read-only in modern browsers; skip if
+        // we can't override. The lang-pref storage check fires first
+        // anyway, so this is belt-and-suspenders.
+        Object.defineProperty(navigator, 'language', { value: 'fr-FR', configurable: true });
+      } catch {
+        // ignore — storage check handles it
+      }
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+    await page.getByTestId('picker-tile-graphing').click();
+    await expect(page.getByTestId('calculator-picker')).toHaveCount(0);
+    const container = page.getByTestId('geogebra-container');
+    // The fr fallback may produce a console-level 404 log for
+    // /geogebra/web3d/js/properties_keys_fr*.js — that's expected and
+    // GGB's loader treats it as "no French, use English". We only
+    // assert that the applet reaches `ready`; the status overlay must
+    // not show the error path.
+    await expect(container).toHaveAttribute('data-state', 'ready', { timeout: 60_000 });
+    // Specifically NOT error — the GGB browser-level 404 for the
+    // missing language file is expected; container data-state='error'
+    // would mean the JS loader chain itself failed.
+    await expect(container).not.toHaveAttribute('data-state', 'error');
+    // And the locale-aware data-app-name guard is unchanged.
+    await expect(container).toHaveAttribute('data-app-name', 'suite');
+  });
+
   test('placeholder path copy references the web3d permutation', async ({ page }) => {
     // ponytail: regression test for the contract documented in spec.md
     // §2.15 — if the bundle is vendored but the applet fails to inject
