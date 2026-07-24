@@ -147,10 +147,12 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - uses: actions/setup-ruby@v5
-        with:
-          ruby-version: "3.1"
-          bundler-cache: true
+      - name: Verify pod is installed (macos-latest has it preinstalled via Homebrew)
+        run: which pod && pod --version
+      - name: Install pod if missing
+        if: failure()
+        run: |
+          brew install cocoapods
       - run: npm ci
       - name: Vendor GeoGebra GWT bundle
         run: bash scripts/fetch-bundle.sh
