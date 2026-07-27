@@ -358,18 +358,19 @@ jobs:
         with:
           arch: x64
       - name: Vendor GeoGebra GWT bundle + Tauri build
-        # Single-step build that captures all output. Calls bash
-        # explicitly for the bundle fetch (uses git) and the vite
-        # build (which has node/node_modules/.bin in PATH via npm
-        # context), then runs `npx tauri build` in cmd context so
-        # the MSVC linker is found first. The whole script exits
-        # with the last command's exit code.
+        # Single-step build. `npm run build` fails on Windows because
+        # npm uses cmd.exe to spawn scripts and cmd doesn't have
+        # node_modules/.bin in PATH — so `tsc` (which lives at
+        # node_modules/.bin/tsc.cmd) is not found. Skip the npm
+        # wrapper and invoke the binaries directly via npx/node until
+        # the script issue is fixed upstream.
         run: |
           set -e
           echo "=== Step 1: vendor bundle ==="
           bash scripts/fetch-bundle.sh
-          echo "=== Step 2: vite build ==="
-          npm run build
+          echo "=== Step 2: tsc + vite build ==="
+          npx tsc --noEmit
+          npx vite build
           echo "=== Step 3: tauri build ==="
           export PATH="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64:$PATH"
           npx tauri build
