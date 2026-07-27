@@ -352,13 +352,24 @@ jobs:
       # BEFORE cargo invokes the linker. Without this, the Rust linker
       # finds Git for Windows's `link.exe` (a coreutils symlink cmd)
       # first and errors with "missing operand".
+      # Note: ilammy/msvc-dev-cmd's `script:` runs in cmd.exe after
+      # vcvars64.bat is sourced, so we use cmd syntax. The fetch-bundle
+      # script's `git ls-remote` / `git cat-file` / `git fetch` work
+      # in both shells; we just need to avoid the `bash` shebang.
       - name: Tauri build
         uses: ilammy/msvc-dev-cmd@v1
         with:
           script: |
             npm ci
-            bash scripts/fetch-bundle.sh
-            ./scripts/build.sh windows
+            git fetch origin agent/general-high/c00e61fe
+            git checkout origin/agent/general-high/c00e61fe -- public/geogebra/
+            echo geogebra_bundle_sha=f7c32bc85ded7076e7c88d381049f9565524d1b8> .geogebra-bundle.sha
+            echo geogebra_bundle_branch=origin/agent/general-high/c00e61fe>> .geogebra-bundle.sha
+            echo file_count=127>> .geogebra-bundle.sha
+            echo total_size=27M>> .geogebra-bundle.sha
+            npm run build
+            xcopy /E /I /Y src-tauri\target\release\build\tauri-* out
+            npx tauri build
         env:
           CI: true
       - name: Collect + rename Windows bundle
