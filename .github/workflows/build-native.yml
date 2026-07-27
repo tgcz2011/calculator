@@ -362,16 +362,18 @@ jobs:
         # npm uses cmd.exe to spawn scripts and cmd doesn't have
         # node_modules/.bin in PATH — so `tsc` (which lives at
         # node_modules/.bin/tsc.cmd) is not found. Skip the npm
-        # wrapper and invoke the binaries directly via npx/node until
-        # the script issue is fixed upstream.
+        # wrapper and invoke the binaries directly via npx/node
+        # after `npm ci` populates node_modules.
         run: |
           set -e
-          echo "=== Step 1: vendor bundle ==="
+          echo "=== Step 1: npm ci ==="
+          npm ci
+          echo "=== Step 2: vendor bundle ==="
           bash scripts/fetch-bundle.sh
-          echo "=== Step 2: tsc + vite build ==="
+          echo "=== Step 3: tsc + vite build ==="
           npx tsc --noEmit
           npx vite build
-          echo "=== Step 3: tauri build ==="
+          echo "=== Step 4: tauri build ==="
           export PATH="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/VC/Tools/MSVC/14.44.35207/bin/HostX64/x64:$PATH"
           npx tauri build
         env:
