@@ -358,9 +358,17 @@ jobs:
         with:
           arch: x64
       - name: Vendor GeoGebra GWT bundle + Tauri build
+        # shell: cmd because the MSVC env set by ilammy is best
+        # consumed in cmd.exe (vcvars64.bat is a .bat). The bundle
+        # fetch uses portable git commands + raw bash works for the
+        # npm/vite steps (link.exe only matters at the Rust link
+        # phase, which is the last step in build.sh).
+        shell: cmd
         run: |
+          npm ci
           bash scripts/fetch-bundle.sh
-          ./scripts/build.sh windows
+          npm run build
+          npx tauri build
         env:
           CI: true
       - name: Collect + rename Windows bundle
