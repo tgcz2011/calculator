@@ -342,19 +342,23 @@ jobs:
           workspaces: src-tauri
       # Tauri 2 on Windows needs the MSVC linker (link.exe) and
       # Windows SDK. windows-2022 doesn't ship with them by default;
-      # we need microsoft/setup-msbuild@v2 + a Visual Studio
-      # installation. Setup-msbuild will trigger the Visual Studio
-      # installer if needed (vswhere).
+      # microsoft/setup-msbuild@v2 downloads + activates them.
       - name: Install MSVC build tools
         uses: microsoft/setup-msbuild@v2
         with:
           vs-version: "17.8"
-      - uses: ilammy/msvc-dev-cmd@v1
-      - run: npm ci
-      - name: Vendor GeoGebra GWT bundle
-        run: bash scripts/fetch-bundle.sh
+      # ilammy/msvc-dev-cmd@v1 wraps the next step in vcvars64.bat so
+      # the MSVC env vars (LIB, INCLUDE, PATH with link.exe) are set
+      # BEFORE cargo invokes the linker. Without this, the Rust linker
+      # finds Git for Windows's `link.exe` (a coreutils symlink cmd)
+      # first and errors with "missing operand".
       - name: Tauri build
-        run: ./scripts/build.sh windows
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          script: |
+            npm ci
+            bash scripts/fetch-bundle.sh
+            ./scripts/build.sh windows
         env:
           CI: true
       - name: Collect + rename Windows bundle
